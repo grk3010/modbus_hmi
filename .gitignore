@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# User specific configuration/state
+hmi_settings.json
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific ignores
+# Extracted IODD folder contents can get huge and are derived from the uploaded zip files.
+# If you only want to track the original generic scripts and allow users to upload their own IODDs, uncomment below:
+# iodd_files/extracted_*/
+# iodd_files/*.zip
