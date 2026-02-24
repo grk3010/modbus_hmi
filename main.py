@@ -34,6 +34,86 @@ def save_settings():
         json.dump(settings, f)
     ui.notify("Settings saved!", type="positive")
 
+class ValveToggle(ui.element):
+    def __init__(self, port_num, initial_state=False, client=None):
+        super().__init__('div')
+        self.port_num = port_num
+        self.state = initial_state
+        self.modbus_client = client
+        self.classes('relative inline-flex items-center w-[168px] h-[72px] rounded-full cursor-pointer transition-all duration-300 border-4 border-solid shadow-sm select-none shrink-0')
+        self.on('click', self.toggle)
+        
+        with self:
+            self.thumb = ui.element('div').classes('absolute w-[54px] h-[54px] bg-white rounded-full shadow-md transition-all duration-300 z-10')
+            self.lbl = ui.label('').classes('absolute text-white font-bold text-lg tracking-wider pointer-events-none transition-all duration-300 z-0')
+            
+        self._update_appearance()
+
+    def toggle(self):
+        self.state = not self.state
+        self._update_appearance()
+        if self.modbus_client:
+            import asyncio
+            asyncio.create_task(self.modbus_client.write_valve(self.port_num, self.state))
+
+    def _update_appearance(self):
+        if self.state:
+            self.classes(remove='border-white bg-[#303030]', add='border-[#20c997] bg-[#20c997]')
+            self.thumb.classes(remove='left-[8px]', add='left-[102px]')
+            self.lbl.set_text('OPEN')
+            self.lbl.classes(remove='right-[16px]', add='left-[16px]')
+        else:
+            self.classes(remove='border-[#20c997] bg-[#20c997]', add='border-white bg-[#303030]')
+            self.thumb.classes(remove='left-[102px]', add='left-[8px]')
+            self.lbl.set_text('CLOSED')
+            self.lbl.classes(remove='left-[16px]', add='right-[16px]')
+
+def get_effective_units(port_num):
+    if settings.get(f"{port_num}_override_units", False):
+        temp_unit = settings.get(f"{port_num}_temp_unit", "°C")
+        pres_unit = settings.get(f"{port_num}_pres_unit", "kPa")
+        flow_unit = settings.get(f"{port_num}_flow_unit", "L/min")
+    else:
+        temp_unit = settings.get("global_temp_unit", "°C")
+        pres_unit = settings.get("global_pres_unit", "kPa")
+        flow_unit = settings.get("global_flow_unit", "L/min")
+    return temp_unit, pres_unit, flow_unit
+
+def apply_unit_scaling(val, v_type, port_num):
+    if not settings.get(f"{port_num}_rescale", False):
+        return val
+        
+    start_u = settings.get(f"{port_num}_scale_from_{v_type}", "")
+    temp_u, pres_u = get_effective_units(port_num)
+    target_u = temp_u if v_type == 'temp' else pres_u
+
+    if not start_u or not target_u or start_u == target_u:
+        return val
+
+    if v_type == 'temp':
+        if start_u == '°F' and target_u == '°C': return (val - 32) / 1.8
+        elif start_u == '°C' and target_u == '°F': return (val * 1.8) + 32
+
+    if v_type == 'pres':
+        kpa = val
+        if start_u == 'MPa': kpa = val * 1000
+        elif start_u == 'psi': kpa = val * 6.89476
+        elif start_u == 'bar': kpa = val * 100
+        
+        if target_u == 'MPa': return kpa / 1000
+        elif target_u == 'psi': return kpa / 6.89476
+        elif target_u == 'bar': return kpa / 100
+        return kpa
+
+    if v_type == 'flow' or v_type == 'flow_total':
+        lpm = val
+        if start_u == 'CFM': lpm = val * 28.3168
+        
+        if target_u == 'CFM': return lpm / 28.3168
+        return lpm
+        
+    return val
+
 # --- UI Styling ---
 ui.add_head_html("""
 <style>
@@ -91,7 +171,7 @@ def index():
                 custom_name = settings.get(f"{port_num}_name", "")
                 display_title = custom_name if custom_name else f"Port {port_num}"
                 
-                with ui.card().classes('dashboard-card q-ma-sm w-96'):
+                with ui.card().classes('dashboard-card q-ma-sm w-96 cursor-pointer').on('click', lambda p=port_num: ui.navigate.to(f'/sensor/{p}')):
                     with ui.row().classes('w-full justify-between items-center'):
                         with ui.row().classes('items-center gap-2'):
                             port_status_icon = ui.image('/iodd_assets/assets/disconnected.png').classes('w-4 h-4 object-contain')
@@ -110,29 +190,36 @@ def index():
                         ui.label(sensor_type).classes('text-subtitle1 text-bold q-mb-md text-center w-full')
                     
                     elements = {'port_status_icon': port_status_icon}
-                    temp_unit = settings.get("global_temp_unit", "°C")
-                    pres_unit = settings.get("global_pres_unit", "kPa")
+                    temp_unit, pres_unit, flow_unit = get_effective_units(port_num)
                     
                     if "MP-F" in sensor_type:
-                        ui.label("Flow Rate").classes('text-subtitle2')
-                        elements['flow_bar'] = ui.linear_progress(value=0, show_value=False).props('color="blue" size="20px"')
-                        elements['flow_lbl'] = ui.label("0 L/min").classes('value-highlight text-blue')
+                        with ui.row().classes('w-full justify-between items-center q-mt-sm'):
+                            with ui.column().classes('items-center'):
+                                elements['temp_unit_lbl'] = ui.label(f"Temp ({temp_unit})").classes('text-caption')
+                                elements['temp_knob'] = ui.knob(0, min=-50, max=150, show_value=True).props('color="red" size="60px"')
+                            with ui.column().classes('items-center'):
+                                elements['pres_unit_lbl'] = ui.label(f"Pres ({pres_unit})").classes('text-caption')
+                                elements['pres_knob'] = ui.knob(0, min=0, max=10000, show_value=True).props('color="orange" size="60px"')
+                            with ui.column().classes('items-center'):
+                                elements['hum_unit_lbl'] = ui.label(f"RH (%)").classes('text-caption')
+                                elements['hum_knob'] = ui.knob(0, min=0, max=100, show_value=True).props('color="blue" size="60px"')
+                                
+                        ui.label("Flow Rate").classes('text-subtitle2 q-mt-md')
+                        elements['flow_bar'] = ui.linear_progress(value=0, show_value=False).props('color="blue" size="28px" track-color="dark"')
+                        with elements['flow_bar']:
+                            elements['flow_lbl'] = ui.label(f"0 {flow_unit}").classes('absolute-center text-white font-bold drop-shadow')
                         
-                        with ui.row().classes('w-full justify-between q-mt-md'):
-                            with ui.column():
-                                ui.label(f"Pressure ({pres_unit})").classes('text-caption')
-                                elements['pres_lbl'] = ui.label(f"0 {pres_unit}").classes('text-h6')
-                            with ui.column():
-                                ui.label(f"Temperature ({temp_unit})").classes('text-caption')
-                                elements['temp_lbl'] = ui.label(f"0 {temp_unit}").classes('text-h6')
+                        with ui.row().classes('w-full justify-between items-center q-mt-sm'):
+                            ui.label("Accumulated:").classes('text-caption text-grey')
+                            elements['flow_tot_lbl'] = ui.label(f"0 {flow_unit}").classes('text-subtitle1 text-bold')
 
                     elif "GP-M" in sensor_type:
                         with ui.row().classes('w-full justify-between items-center q-mt-md'):
                             with ui.column().classes('items-center'):
-                                ui.label(f"Pressure ({pres_unit})").classes('text-subtitle2')
+                                elements['pres_unit_lbl'] = ui.label(f"Pressure ({pres_unit})").classes('text-subtitle2')
                                 elements['pres_knob'] = ui.knob(0, min=0, max=10000, show_value=True).props('color="orange" size="100px"')
                             with ui.column().classes('items-center'):
-                                ui.label(f"Temperature ({temp_unit})").classes('text-subtitle2')
+                                elements['temp_unit_lbl'] = ui.label(f"Temperature ({temp_unit})").classes('text-subtitle2')
                                 elements['temp_knob'] = ui.knob(0, min=-50, max=300, show_value=True).props('color="red" size="100px"')
                     else:
                         elements['generic'] = ui.label("")
@@ -161,30 +248,211 @@ def index():
             if not data and not port_online:
                 continue
                 
-            temp_unit = settings.get("global_temp_unit", "°C")
-            pres_unit = settings.get("global_pres_unit", "kPa")
+            temp_unit, pres_unit, flow_unit = get_effective_units(port_num)
             
             if "MP-F" in sensor_type:
-                flow = data.get('1FlowInst', 0)
-                pressure = data.get('1Pressure', 0)
-                temp = data.get('1Temperature', 0)
+                flow = apply_unit_scaling(data.get('1FlowInst', 0), 'flow', port_num)
+                flow_tot = apply_unit_scaling(data.get('1FlowTotal', 0), 'flow_total', port_num)
+                pressure = apply_unit_scaling(data.get('1Pressure', 0), 'pres', port_num)
+                temp = apply_unit_scaling(data.get('1Temperature', 0) / 10.0, 'temp', port_num)
+                hum = data.get('1Humidity', 0) / 10.0
+                max_flow = float(settings.get(f"{port_num}_max_flow", 1000.0))
                 
-                elements['flow_bar'].value = min(flow / 1000.0, 1.0)
-                elements['flow_lbl'].set_text(f"{flow} L/min")
-                elements['pres_lbl'].set_text(f"{pressure} {pres_unit}")
-                elements['temp_lbl'].set_text(f"{temp / 10.0} {temp_unit}")
+                elements['pres_unit_lbl'].set_text(f"Pres ({pres_unit})")
+                elements['temp_unit_lbl'].set_text(f"Temp ({temp_unit})")
+                
+                elements['temp_knob'].value = round(temp, 1)
+                elements['pres_knob'].value = round(pressure, 1)
+                elements['hum_knob'].value = round(hum, 1)
+                
+                elements['flow_bar'].value = min(flow / max(max_flow, 1.0), 1.0)
+                elements['flow_lbl'].set_text(f"{round(flow, 1)} {flow_unit}")
+                elements['flow_tot_lbl'].set_text(f"{round(flow_tot, 1)} {flow_unit}")
+                
             elif "GP-M" in sensor_type:
-                pressure = data.get('Pressure', 0)
-                temp = data.get('Temp', 0)
+                pressure = apply_unit_scaling(data.get('Pressure', 0), 'pres', port_num)
+                temp = apply_unit_scaling(data.get('Temp', 0) / 10.0, 'temp', port_num)
                 
-                elements['pres_knob'].value = pressure
-                elements['temp_knob'].value = temp / 10.0
+                elements['pres_unit_lbl'].set_text(f"Pressure ({pres_unit})")
+                elements['temp_unit_lbl'].set_text(f"Temperature ({temp_unit})")
+                
+                elements['pres_knob'].value = round(pressure, 1)
+                elements['temp_knob'].value = round(temp, 1)
             else:
                 elements['generic'].set_text(", ".join([f"{k}: {v}" for k, v in data.items()]))
 
     # Initial build and periodic update
     setup_cards()
     ui.timer(1.0, update_cards)
+
+@ui.page('/sensor/{port_id}')
+def sensor_page(port_id: str):
+    port_num = int(port_id)
+    sensor_type = settings.get(str(port_num), "")
+    custom_name = settings.get(f"{port_num}_name", "")
+    display_title = custom_name if custom_name else f"Port {port_num}"
+
+    with ui.header().classes('bg-dark text-white items-center q-pa-md shadow-2'):
+        ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/')).props('flat')
+        ui.label(display_title).classes('text-h5 font-bold')
+        ui.space()
+        with ui.row().classes('items-center gap-2'):
+            sensor_status_icon = ui.image('/iodd_assets/assets/disconnected.png').classes('w-6 h-6 object-contain')
+            sensor_status_lbl = ui.label('Sensor Disconnected').classes('text-subtitle1 text-grey')
+
+    if not sensor_type:
+        with ui.column().classes('w-full items-center q-pa-xl'):
+            ui.label("No sensor configured for this port.").classes('text-h5 text-grey q-ma-xl')
+        return
+
+    pic_path = sensor_parser.get_sensor_pic(sensor_type)
+    icon_path = sensor_parser.get_sensor_icon(sensor_type)
+    img_src = pic_path if pic_path else icon_path
+    
+    with ui.column().classes('w-full items-center q-pa-md'):
+        if img_src:
+            rel_src = f"/iodd_assets/{os.path.relpath(img_src, os.path.abspath(IODD_DIR))}"
+            ui.image(rel_src).classes('h-64 object-contain bg-white rounded shadow-sm q-pa-sm w-full max-w-lg q-mt-md').props('fit="contain"')
+        
+        # Dashboard display container for this sensor
+        data_card = ui.card().classes('dashboard-card w-full max-w-3xl q-mt-lg items-center')
+        
+        elements = {}
+        
+        @ui.refreshable
+        def render_sensor_data():
+            elements.clear()
+            temp_unit, pres_unit, flow_unit = get_effective_units(port_num)
+            
+            if "MP-F" in sensor_type:
+                with ui.row().classes('w-full justify-around items-center q-pa-md'):
+                    with ui.column().classes('items-center'):
+                        ui.label(f"Temperature ({temp_unit})").classes('text-subtitle1 text-grey')
+                        elements['temp_knob'] = ui.knob(0, min=-50, max=150, show_value=True).props('color="red" size="120px" track-color="dark"')
+                    with ui.column().classes('items-center'):
+                        ui.label(f"Pressure ({pres_unit})").classes('text-subtitle1 text-grey')
+                        elements['pres_knob'] = ui.knob(0, min=0, max=10000, show_value=True).props('color="orange" size="120px" track-color="dark"')
+                    with ui.column().classes('items-center'):
+                        ui.label(f"Humidity (%)").classes('text-subtitle1 text-grey')
+                        elements['hum_knob'] = ui.knob(0, min=0, max=100, show_value=True).props('color="blue" size="120px" track-color="dark"')
+
+                with ui.row().classes('w-full items-end q-pa-md q-px-xl justify-between flex-nowrap gap-6'):
+                    with ui.column().classes('flex-grow'):
+                        ui.label(f"Instantaneous Flow Rate ({flow_unit})").classes('text-subtitle1 text-grey')
+                        elements['flow_bar'] = ui.linear_progress(value=0, show_value=False).props('color="blue" size="44px" track-color="dark"').classes('q-mt-sm w-full rounded')
+                        with elements['flow_bar']:
+                            elements['flow_lbl'] = ui.label(f"0 {flow_unit}").classes('absolute-center text-h5 text-white text-bold drop-shadow-lg')
+                    with ui.column().classes('items-center shrink-0'):
+                        ui.label(f"Max Flowrate").classes('text-subtitle1 text-grey')
+                        max_f = ui.number(value=float(settings.get(f"{port_num}_max_flow", 1000.0)), step=10, on_change=lambda e: [settings.update({f"{port_num}_max_flow": e.value}), save_settings()]).classes('w-28 q-mt-sm')
+                        
+                with ui.row().classes('w-full justify-center items-center q-pa-sm'):
+                    ui.label("Accumulated Flow:").classes('text-h6 text-grey q-mr-md')
+                    elements['flow_tot_lbl'] = ui.label(f"0 {flow_unit}").classes('text-h5 text-bold')
+
+                with ui.row().classes('w-full justify-center items-center q-pa-sm q-mt-sm gap-4'):
+                    ui.label("Valve State:").classes('text-h6 text-grey font-bold')
+                    ValveToggle(port_num, initial_state=False, client=modbus_client)
+
+            elif "GP-M" in sensor_type:
+                with ui.row().classes('w-full justify-around items-center q-pa-md'):
+                    with ui.column().classes('items-center'):
+                        ui.label(f"Pressure ({pres_unit})").classes('text-subtitle1 text-grey')
+                        elements['pres_knob'] = ui.knob(0, min=-50, max=10000, show_value=True).props('color="orange" size="150px" track-color="dark"')
+                    with ui.column().classes('items-center'):
+                        ui.label(f"Temperature ({temp_unit})").classes('text-subtitle1 text-grey')
+                        elements['temp_knob'] = ui.knob(0, min=-50, max=300, show_value=True).props('color="red" size="150px" track-color="dark"')
+            else:
+                elements['generic'] = ui.label("")
+                
+        with data_card:
+            render_sensor_data()
+            
+        def update_single_card():
+            data = modbus_client.port_data.get(port_num, {})
+            port_online = modbus_client.port_status.get(port_num, False)
+            
+            if port_online:
+                sensor_status_icon.set_source('/iodd_assets/assets/connected.png')
+                sensor_status_lbl.set_text('Sensor Connected')
+                sensor_status_lbl.classes(replace='text-grey', add='text-green')
+            else:
+                sensor_status_icon.set_source('/iodd_assets/assets/disconnected.png')
+                sensor_status_lbl.set_text('Sensor Disconnected')
+                sensor_status_lbl.classes(replace='text-green', add='text-grey')
+                
+            if not data and not port_online:
+                return
+            
+            temp_unit, pres_unit, flow_unit = get_effective_units(port_num)
+            
+            if "MP-F" in sensor_type:
+                flow = apply_unit_scaling(data.get('1FlowInst', 0), 'flow', port_num)
+                flow_tot = apply_unit_scaling(data.get('1FlowTotal', 0), 'flow_total', port_num)
+                pressure = apply_unit_scaling(data.get('1Pressure', 0), 'pres', port_num)
+                temp = apply_unit_scaling(data.get('1Temperature', 0) / 10.0, 'temp', port_num)
+                hum = data.get('1Humidity', 0) / 10.0
+                max_flow = float(settings.get(f"{port_num}_max_flow", 1000.0))
+                
+                elements.get('temp_knob', ui.knob()).value = round(temp, 1)
+                elements.get('pres_knob', ui.knob()).value = round(pressure, 1)
+                elements.get('hum_knob', ui.knob()).value = round(hum, 1)
+                
+                elements.get('flow_bar', ui.linear_progress()).value = min(flow / max(max_flow, 1.0), 1.0)
+                elements.get('flow_lbl', ui.label()).set_text(f"{round(flow, 1)} {flow_unit}")
+                elements.get('flow_tot_lbl', ui.label()).set_text(f"{round(flow_tot, 1)} {flow_unit}")
+            elif "GP-M" in sensor_type:
+                pressure = apply_unit_scaling(data.get('Pressure', 0), 'pres', port_num)
+                temp = apply_unit_scaling(data.get('Temp', 0) / 10.0, 'temp', port_num)
+                
+                elements.get('pres_knob', ui.knob()).value = round(pressure, 1)
+                elements.get('temp_knob', ui.knob()).value = round(temp, 1)
+            else:
+                elements.get('generic', ui.label()).set_text(", ".join([f"{k}: {v}" for k, v in data.items()]))
+
+        ui.timer(1.0, update_single_card)
+        
+        # Override Settings Card
+        with ui.card().classes('dashboard-card w-full max-w-3xl q-mt-lg'):
+            ui.label("Unit Selection & Scaling").classes('text-h6 text-primary q-mb-md')
+            
+            override_cb = ui.checkbox("Override Global Units").bind_value(settings, f"{port_num}_override_units")
+            override_cb.on('update:model-value', lambda: [save_settings(), render_sensor_data.refresh()])
+            
+            with ui.row().classes('items-center gap-6 q-mt-sm q-ml-md').bind_visibility_from(override_cb, 'value'):
+                temp_u = ui.select(['°C', '°F'], label="Display Temp Unit").classes('w-32')
+                temp_u.bind_value(settings, f"{port_num}_temp_unit")
+                temp_u.on('update:model-value', lambda: [save_settings(), render_sensor_data.refresh()])
+                
+                pres_u = ui.select(['kPa', 'MPa', 'psi', 'bar'], label="Display Pres Unit").classes('w-32')
+                pres_u.bind_value(settings, f"{port_num}_pres_unit")
+                pres_u.on('update:model-value', lambda: [save_settings(), render_sensor_data.refresh()])
+                
+                flow_u = ui.select(['L/min', 'CFM'], label="Display Flow Unit").classes('w-32')
+                flow_u.bind_value(settings, f"{port_num}_flow_unit")
+                flow_u.on('update:model-value', lambda: [save_settings(), render_sensor_data.refresh()])
+
+            ui.separator().classes('q-my-md')
+            
+            rescale_cb = ui.checkbox("Rescale Output (Apply Math Conversion)").bind_value(settings, f"{port_num}_rescale")
+            rescale_cb.on('update:model-value', lambda: [save_settings(), render_sensor_data.refresh()])
+            
+            with ui.row().classes('items-center gap-6 q-mt-sm q-ml-md').bind_visibility_from(rescale_cb, 'value'):
+                scale_temp_f = ui.select(['°C', '°F'], label="Scale TEMP From").classes('w-40')
+                scale_temp_f.bind_value(settings, f"{port_num}_scale_from_temp")
+                scale_temp_f.on('update:model-value', lambda: [save_settings(), render_sensor_data.refresh()])
+                
+                scale_pres_f = ui.select(['kPa', 'MPa', 'psi', 'bar'], label="Scale PRES From").classes('w-40')
+                scale_pres_f.bind_value(settings, f"{port_num}_scale_from_pres")
+                scale_pres_f.on('update:model-value', lambda: [save_settings(), render_sensor_data.refresh()])
+
+                scale_flow_f = ui.select(['L/min', 'CFM'], label="Scale FLOW From").classes('w-40')
+                scale_flow_f.bind_value(settings, f"{port_num}_scale_from_flow")
+                scale_flow_f.on('update:model-value', lambda: [save_settings(), render_sensor_data.refresh()])
+                
+                scale_flow_t_f = ui.select(['L', 'ft³', 'gal'], label="Scale TOTAL FLOW From").classes('w-40')
+                scale_flow_t_f.bind_value(settings, f"{port_num}_scale_from_flow_total")
+                scale_flow_t_f.on('update:model-value', lambda: [save_settings(), render_sensor_data.refresh()])
 
 @ui.page('/config')
 def config_page():
@@ -198,7 +466,25 @@ def config_page():
 
     with ui.row().classes('w-full q-pa-md justify-center'):
         with ui.column().classes('w-1/2 dashboard-card'):
-            ui.label("Master Configuration").classes('text-h6')
+            with ui.row().classes('w-full justify-between items-center'):
+                ui.label("Master Configuration").classes('text-h6')
+                
+                async def handle_discover():
+                    try:
+                        max_ports = 8 if "8" in settings.get("master_type", "NQ-MP8L") else 4
+                        discovered = await modbus_client.auto_discover(max_ports=max_ports)
+                        if discovered:
+                            for p, sensor in discovered.items():
+                                settings[str(p)] = sensor
+                            save_settings()
+                            port_mapping_ui.refresh()
+                            ui.notify("Sensors Auto-Discovered!", type="positive", icon="search")
+                        else:
+                            ui.notify("No sensors found or mapped.", type="warning")
+                    except Exception as e:
+                        ui.notify(f"Discovery Error: {e}", type="negative")
+
+                ui.button("Auto Discover", icon="search", on_click=handle_discover, color="amber-8").classes('rounded shadow')
             
             @ui.refreshable
             def port_mapping_ui():
@@ -286,6 +572,9 @@ def config_page():
                 
                 pres_u = ui.select(['kPa', 'MPa', 'psi', 'bar'], value=settings.get("global_pres_unit", "kPa"), label="Global Pres Unit", on_change=port_mapping_ui.refresh).classes('w-32')
                 pres_u.bind_value(settings, "global_pres_unit")
+                
+                flow_u = ui.select(['L/min', 'CFM'], value=settings.get("global_flow_unit", "L/min"), label="Global Flow Unit", on_change=port_mapping_ui.refresh).classes('w-32')
+                flow_u.bind_value(settings, "global_flow_unit")
             
             ui.separator().classes('q-my-md')
             port_mapping_ui()
