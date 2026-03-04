@@ -1,0 +1,483 @@
+8-2 Communication Settings .....................................................................................Page 8-4
+8-3 Parameter Settings..............................................................................................Page 8-5
+8-4 Cyclic Communication ........................................................................................Page 8-6
+Slot Assignment ..............................................................................................Page 8-6
+Slot 1: Basic ....................................................................................................Page 8-7
+Slots 2 to 9: Port configuration generic ...........................................................Page 8-7
+Slot 10: Diagnostics ........................................................................................Page 8-8
+Slot 11: IO-Link Events ....................................................................................Page 8-9
+Slot 12: VAUX control ......................................................................................Page 8-9
+Slot 13: Module status...................................................................................Page 8-10
+8-5 Acyclic Communication ....................................................................................Page 8-11
+Device User Data ..........................................................................................Page 8-11
+8-6 PROFINET Diagnostic Information ....................................................................Page 8-12
+8-7 IO-Link Function Blocks ....................................................................................Page 8-13
+Input Variables ..............................................................................................Page 8-13
+Output Variables ...........................................................................................Page 8-13
+
+Chapter 9 Appendix
+Analog input data format.................................................................................Page 9-2
+NQ-IL8P Parameters .....................................................................................Page 9-11
+Output File Formats.......................................................................................Page 9-14
+Troubleshooting ............................................................................................Page 9-16
+Data Update Time .........................................................................................Page 9-19
+
+NQ Series User’s Manual
+
+9
+
+Table of Contents
+
+10
+
+NQ Series User’s Manual
+
+1
+1
+Before Operation
+
+Before Operation
+
+This chapter describes the contents that you should know before using this product, including
+the package contents and an overview of the NQ Series.
+
+1-1
+
+Overview of the NQ Series.................................................................................. Page 1-2
+
+1-2
+
+Checking the Package Contents........................................................................ Page 1-3
+
+1-3
+
+Additional Parts List............................................................................................ Page 1-4
+
+1-4
+
+Part Names and Functions ................................................................................. Page 1-7
+
+1-5
+
+--
+8-3
+
+Parameter Settings.............................................................................................. Page 8-5
+
+8-4
+
+Cyclic Communication........................................................................................ Page 8-6
+
+8-5
+
+Acyclic Communication.................................................................................... Page 8-11
+
+8-6
+
+PROFINET Diagnostic Information .................................................................. Page 8-12
+
+8-7
+
+IO-Link Function Blocks ................................................................................... Page 8-13
+
+NQ Series User’s Manual
+
+8-1
+
+PROFINET Communication
+
+8-1
+
+8-1
+
+NQ-MP8L PROFINET Communication Function
+
+Overview
+The NQ-MP8L operates as a PROFINET IO device. You can use cyclic communication to obtain the output and measured
+values of devices connected to the NQ Series and to monitor the error status of the NQ Series. Also, you can use acyclic
+communication to read and write the settings of the NQ Series and the devices connected to the NQ Series.
+NQ Series
+
+IO controller
+Cyclic communication
+Status
+
+Output
+
+Output
+
+Present value
+
+Present value
+
+Error information
+etc.
+
+Error information
+
+Output
+
+etc.
+
+Cyclic communication
+
+Present value
+External output
+
+Tuning
+
+Error information
+etc.
+
+8
+
+Acyclic communication
+
+Tuning
+
+PROFINET Communication
+
+Reading and writing of various parameters
+
+Point
+
+8-2
+
+PROFINET is only supported by the NQ-MP8L. It is not supported by the NQ-EP4L and NQ-EP4A.
+
+NQ Series User’s Manual
+
+8-1 NQ-MP8L PROFINET Communication Function
+
+NQ Series PROFINET Communication Specifications
+Item
+
+NQ-MP8L
+
+Communication speed
+Ethernet
+
+PROFINET
+
+100 Mbps (100BASE-TX)
+
+Transmission media
+
+STP cable or Category 5 or higher UTP cable
+
+Max. cable length
+
+100 m (between nodes)
+
+Supported functions
+
+Cyclic communication (data I/O communication)
+Acyclic communication (record data communication)
+
+FSU (Fast Start-UP)
+
+Not supported
+
+MRP (Media Redundancy Protocol)
+
+Supported
+
+Number of connectable IO controllers
+
+1
+
+Update time
+
+2 to 512 ms
+
+GSDML version
+
+V2.35
+
+Conformance class
+
+Compliant with Conformance Class B
+
+Conformance test version
+
+Compliant with V2.35
+
+Applicable protocols
+
+LLDP, DCP
+
+8
+
+NQ Sensor Monitor
+
+PROFINET
+configuration software
+
+Set the NQ Series port.
+
+
+
+
+
+Control the power supplied to each port.
+
+
+
+--
+-
+
+-
+
+
+
+
+
+Item
+
+Cyclic communication Acyclic communication
+-
+
+
+
+When connected to an IO-Link device
+Read control output (ON/OFF).
+
+
+
+-
+
+
+
+
+
+Read the present value (measured value, etc.).
+
+
+
+-
+
+
+
+
+
+Read setting values.
+
+-
+
+-
+
+-
+
+
+
+Change (write) setting values.
+
+-
+
+-
+
+-
+
+
+
+Change (write) parameters.
+
+-
+
+-
+--
+None
+
+8-10
+
+Description
+
+NQ Series User’s Manual
+
+8-5
+
+Acyclic Communication
+
+Device User Data
+Index
+Item
+HEX
+
+Description
+
+Attribute
+
+Data type
+
+Description
+
+DEC
+
+0001
+
+1
+
+Module parameters
+
+Module parameters (slot 0)
+
+R/W
+
+WORD
+
+0002
+
+2
+
+Module designation
+
+Module model
+
+R
+
+STRING
+
+NQ-MP8L
+
+0003
+
+3
+
+Reserved
+
+0004
+
+--
+DWORD
+
+LEN
+
+INT
+
+Description
+Normal completion.
+Execution in progress.
+An error has occurred.
+This is the acyclic communication error status
+(refer to the table under “STATUS”).
+This is an error message defined in “IO-Link
+Integration Part 1 - Technical Specification for
+PROFIBUS and PROFINET” and “IO-Link
+Interface and System.”
+This is the length of the data to read.
+
+ STATUS
+Indicates the error that occurred during PROFINET
+acyclic communication.
+Status
+code (HEX)
+
+Variable name
+
+Data type
+
+REQ
+
+BOOL
+
+ID
+
+INDEX_CAP
+
+DWORD
+
+INT
+
+RD_WR
+
+BOOL
+
+ENTITY_PORT
+
+INT
+
+FI_INDEX
+
+INT
+
+IOL_INDEX
+
+INT
+
+IOL_SUBINDEX
+
+INT
+
+LEN
+
+INT
+
+RECORD_IOL_
+DATA
+
+BYTE array
+
+Description
+The command is executed when this variable
+--
+accessed.
+IO-Link master is busy or is
+waiting for a response from an
+IO-Link device.
+The stored data is larger than
+the length specified with
+“LEN”.
+
+ IOL_STATUS
+Indicates the error that occurred during IO-Link
+acyclic communication.
+Byte3
+
+NQ Series User’s Manual
+
+Byte2
+Error code
+
+Byte1
+
+Byte0
+
+Error type
+
+8-13
+
+8
+PROFINET Communication
+
+Input Variables
+
+Name
+
+FF000000
+00FFFF00
+00FFFE00
+00FFFD00
+00FFFC00
+00FFFB00
+xx80A0xx
+xx80A1xx
+xx80A2xx
+xx80A6xx
+xx80A7xx
+
+8-7 IO-Link Function Blocks
+
+Error code
+0000
+
+Name
+No error
+
+7000
+
+IOL_CALL conflict
+
+7001
+
+Wrong IOL_CALL
+

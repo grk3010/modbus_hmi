@@ -1,0 +1,763 @@
+7
+
+Modbus/TCP
+Communication
+
+8
+
+PROFINET
+Communication
+
+IO-Link I/O Module
+
+9
+--
+Identify Object (Class ID: 1H) .......................................................................Page 6-28
+
+Chapter 7 Modbus/TCP Communication
+7-1 NQ Series Modbus/TCP Communication Function .............................................Page 7-2
+Overview .........................................................................................................Page 7-2
+Modbus/TCP Communication Specifications..................................................Page 7-3
+7-2 Communication Settings .....................................................................................Page 7-4
+NQ Series Settings ..........................................................................................Page 7-4
+PLC and Controller Settings............................................................................Page 7-4
+Command Formats..........................................................................................Page 7-4
+7-3 Register Mapping................................................................................................Page 7-6
+NQ-MP8L/EP4L ...............................................................................................Page 7-6
+
+8
+
+NQ Series User’s Manual
+--
+1
+
+Ethernet protocols such as EtherNet/IP, PROFINET, and Modbus/TCP.
+
+Before Operation
+
+The NQ Series has two power supply ports and two Ethernet ports, and each module can be connected in a daisy chain.
+Along with this, I/O modules are available for connecting analog input modules and general-purpose I/O devices. These I/
+O modules make it possible to use data with simplified wiring and communication while using existing devices.
+The NQ Series also boasts IP65/67/69K enclosure ratings for use in a wide range of environments.
+IO-Link is a communication interface that complies with the international standard IEC 61131-9 and does not require a
+
+Reference
+--
+*4
+
+Modbus/TCP
+
+Power supply
+cable
+
+Max 10 m*2
+
+Ethernet cable
+
+IO-Link communication (maximum cable
+length: 20 m)
+--
+Lit
+
+Modbus/TCP watch dog time-out
+IP address setting switches set to “0.0.0”
+
+Green
+Orange
+-
+
+Auto negotiation in progress or standing
+Blinking by for IP address assignment via DHCP/
+BootP
+Unlit
+--
+
+IP address duplication
+Modbus/TCP watch dog time-out
+
+Auto negotiation in progress or standing
+Blinking by for IP address assignment via DHCP/
+BootP
+Unlit
+
+Power supply OFF
+
+Lit
+
+--
+Green
+
+Modbus/TCP watch dog time-out
+
+Auto negotiation in progress or standing
+Blinking by for IP address assignment via DHCP/
+BootP
+
+(Center
+LED)
+
+IO-Link
+communication
+--
+
+ For EtherNet/IP Communication (Page 6-1)
+ For Modbus/TCP Communication (Page 7-1)
+ For PROFINET Communication (Page 8-1)
+
+4. Start of communication
+
+1-10
+
+NQ Series User’s Manual
+
+2
+Specifications
+--
+
+NQ-EP4L
+EtherNet/IP, Modbus/TCP
+
+M12, 4 pins, female, D-code
+
+Connector
+
+Power supply
+specifications
+
+NQ-MP8L
+EtherNet/IP, PROFINET, Modbus/TCP
+
+Maximum load current
+Short-circuit protection
+circuit
+
+Available
+
+Available
+
+Leakage current
+--
+specifications
+
+EtherNet/IP, Modbus/TCP
+
+Communication speed
+
+10 Mbps / 100 Mbps
+
+Connector type
+
+M8, 4 pins, female, A-code
+
+Connector type
+--
+
+< Configuring settings via field bus >
+Settings can also be configured via EtherNet/IP, Modbus/TCP, and PROFINET. In this situation, select the operation mode
+from the options shown below.
+Operation mode
+IO-Link without validation
+IO-Link with family compatible device
+IO-Link with compatible device
+IO-Link with identical device
+DI (with parameter access)
+DI
+*1
+*2
+--
+Network
+EtherNet/IP
+Modbus/TCP
+PROFINET
+
+Parameter settings using the
+configuration software
+Page 6-6
+Page 8-5
+
+Message
+communication
+Page 6-19
+--
+
+< Configuring settings via field bus >
+Settings can also be configured via EtherNet/IP, Modbus/TCP, and PROFINET. For the detailed setting method, refer to the
+following pages.
+Network
+EtherNet/IP
+Modbus/TCP
+PROFINET
+
+Parameter settings using the
+configuration software
+Page 6-6
+Page 8-5
+
+Message
+communication
+Page 6-19
+--
+
+< Configuring settings via field bus >
+Settings can also be configured via EtherNet/IP, Modbus/TCP, and PROFINET. For the detailed setting method, refer to the
+following pages.
+Network
+EtherNet/IP
+Modbus/TCP
+PROFINET
+
+4-16
+
+Parameter settings using the
+configuration software
+Page 6-6
+Page 8-5
+
+Message
+--
+When [Manual] is specified, you can set the cycle time to a value from 1.6 to 132.8 ms in intervals of 0.8 ms or 1.6 ms.
+< Configuring settings via field bus >
+Settings can also be configured via EtherNet/IP, Modbus/TCP, and PROFINET. The relationship between the value to write
+and the cycle time is shown below.
+
+Automatic
+
+10
+18
+20
+28
+30
+38
+--
+Network
+EtherNet/IP
+Modbus/TCP
+PROFINET
+
+Parameter settings using the
+configuration software
+Page 6-6
+Page 8-5
+
+Message
+communication
+Page 6-19
+--
+Network
+EtherNet/IP
+Modbus/TCP
+PROFINET
+
+Reference
+
+Parameter settings using the
+configuration software
+Page 6-11
+Page 8-5
+
+Message
+--
+
+7
+Modbus/TCP
+Communication
+
+This chapter describes how to configure the NQ Series settings using NQ Monitor.
+
+7
+NQ Series Modbus/TCP Communication Function .......................................... Page 7-2
+
+7-2
+
+Communication Settings .................................................................................... Page 7-4
+
+7-3
+
+Register Mapping ................................................................................................ Page 7-6
+
+NQ Series User’s Manual
+--
+7-1
+
+Modbus/TCP Communication
+
+7-1
+
+7-1
+
+NQ Series Modbus/TCP Communication Function
+
+Overview
+Modbus is a general purpose networking protocol used in FA (Factory Automation) and PA (Process Automation).
+Modbus only specifies the communication protocol, not the communication cable. Therefore, there are three types of
+cables: ModbusRTU and Modbus ASCII, which are based on serial communication such as RS-232C and RS-485, and
+Modbus/TCP, which communicates over Ethernet.
+In Modbus communication, there are generally four types of data areas: coil, input status, input register, and holding
+register. By issuing commands that specify function codes and sending these commands to slave units from the master
+unit, it is possible to read and write the data in these areas.
+The NQ Series operates as a slave unit (server device) in Modbus/TCP communication.
+
+7
+
+Note that unlike other network standards, Modbus is not subject to systematic application management. Therefore, it is
+
+Modbus/TCP Communication
+
+necessary to use actual machines to verify that devices that support Modbus can be connected to each other.
+
+
+
+Modbus/TCP
+
+NQ-MP8L/EP4L
+
+
+
+NQ-EP4A
+
+• Voltage
+• Current
+• Thermocouple
+--
+
+IO-Link sensor
+Modbus is a trademark or registered trademark of Schneider Automation Inc.
+
+7-2
+
+NQ Series User’s Manual
+
+7-1 NQ Series Modbus/TCP Communication Function
+
+Modbus/TCP Communication
+Specifications
+ Modbus/TCP communication
+specifications
+Item
+Communication
+speed
+Transmission
+media
+Ethernet
+
+Modbus/TCP
+
+100 m (between nodes)
+Static IP, BOOTP, DHCP
+
+7
+
+502 (fixed)
+Refer to the Modbus/TCP-supported
+function codes shown below.
+
+Modbus/TCP Communication
+
+Maximum cable
+length
+IP address
+setting
+Port number
+Supported
+function codes
+
+NQ-MP8L
+--
+3 Device process data setting
+
+Modbus/TCP Communication
+
+Set the process data of the IO-Link device to connect
+
+Description
+Normally 0
+Normally 0
+Size of the data to send after
+this point
+Normally 1
+Function code for reading
+--
+PLC and Controller Settings
+This section explains the flow of settings on the
+Modbus/TCP client side. For details, refer to the
+manual of each device.
+
+1 IP address setting
+Set the IP address of the Modbus/TCP client.
+
+The NQ Series operates as a server device for
+Modbus/TCP communication.
+
+Value
+(HEX)
+
+Transaction ID
+
+2
+
+0000H
+
+--
+client device.
+For details on the NQ Series register settings, refer to
+"Modbus/TCP Communication Specifications" (Page
+7-3).
+
+7-4
+
+Size
+(bytes)
+
+Value
+(HEX)
+
+--
+
+7
+Modbus/TCP Communication
+
+< Response (normal) >
+Size
+(bytes)
+
+Value
+(HEX)
+
+Transaction ID
+
+--
+0
+
+Modbus/TCP Communication
+
+0001
+
+1
+
+400002
+
+0001
+
+1
+--
+
+7
+Modbus/TCP Communication
+
+0084
+
+3
+
+0: No error
+1: Error
+
+The device issued a
+parameter error. (Such
+--
+
+7
+Modbus/TCP Communication
+
+008D
+
+141
+
+400142
+
+0048
+
+72
+--
+404402
+
+Modbus connection timeout time
+
+R/W
+
+UINT
+
+Indicates the Modbus connection time-out time. (Unit:
+Seconds)
+If no communication is made before the setting time
+elapses, the connection is disconnected automatically.
+0 to 65535
+When the setting time is [0], the connection time-out is not (Initial value: 0)
+monitored.
+When the Modbus connection time-out is active, the [BUS
+LED] blinks in green.
+
+NQ Series User’s Manual
+
+7-9
+
+Modbus/TCP Communication
+
+Address
+NQ-MP8L
+NQ-EP4L
+Item
+Relative
+Absolute
+Relative
+Absolute
+HEX
+--
+
+UINT
+Modbus parameter reset
+
+113D
+
+4413
+
+404414
+
+113D
+
+4413
+--
+
+404415
+Modbus parameter save
+
+7
+
+Data
+type
+
+R/W
+
+bit
+
+--
+UINT
+
+If the Modbus connection settings are not saved (113EH
+and 113FH), the values in the EEPROM are not changed.
+
+UINT
+
+The values of registers 1120H and 1130 to 113BH are
+saved into the EEPROM using the following procedure:
+(1) “7361H (“SA”)” is written in register 113EH.
+(2) At the same time as (1) or within 30 seconds of (1),
+“7665H (“VE”)” is written in 113FH.
+
+--
+Indicates the V2 voltage. (Unit: mV)
+
+Modbus/TCP Communication
+
+B000
+
+45056
+
+445057
+
+B000
+
+45056
+--
+
+7
+Modbus/TCP Communication
+
+Parameter
+
+WORD
+
+Value
+
+7-3 Register Mapping
+
+7
+Modbus/TCP Communication
+
+Address
+NQ-MP8L
+NQ-EP4L
+Item
+Relative
+Absolute
+Relative
+Absolute
+HEX
+--
+7-13
+
+Modbus/TCP Communication
+
+V1 power supply control
+setting
+
+0: Supply 24 VDC •
+1: Switch based on
+Controls the power
+process data (Page
+supplied to each device.
+4-18)
+--
+
+7
+Modbus/TCP Communication
+
+7-14
+
+NQ Series User’s Manual
+
+0: Supply 24 VDC •
+1: Switch based on
+Controls the power
+process data (Page
+supplied to each device.
+--
+
+7
+Modbus/TCP Communication
+
+4
+
+-
+
+0
+
+Port 1
+(C0)
+
+--
+
+7
+Modbus/TCP Communication
+
+1000
+:
+100B
+
+100C
+
+4096
+:
+4107
+--
+404413
+
+Modbus connection timeout time
+
+113E
+
+4413
+
+4414
+
+7-16
+
+4415
+--
+404416
+
+Indicates the Modbus connection time-out time. (Unit: Seconds)
+If no communication is made before the setting time elapses, the connection
+is disconnected automatically. When the setting time is [0], the connection
+0 to 65535
+time-out is not monitored.
+(Initial value: 0)
+When the Modbus connection time-out is active, the [BUS LED] blinks in
+green.
+Registers 1120H and 1130 to 113BH are reset to their initial values in the
+following procedure:
+(1) “6C6FH (“LO”)” is written in register 113CH.
+(2) At the same time as (1) or within 30 seconds of (1), “6164H (“AD”)” is
+See the left column.
+written in 113DH.
+
+UINT
+
+UINT
+Modbus parameter save
+
+113F
+
+UINT
+
+UINT
+Modbus parameter reset
+
+113D
+
+R/W
+
+< Output >
+When the setting time is [= 0 (ms)]: The watch dog timer is deactivated. The
+output is retained.
+When the setting time is [> 0 (ms)]: If no communication is made before the
+setting time elapses, the output is set to 0.
+--
+UINT
+
+If the Modbus connection settings are not saved (113EH and 113FH), the
+values in the EEPROM are not changed.
+The values of registers 1120H and 1130 to 113BH are saved into the EEPROM using
+the following procedure:
+(1) “7361H (“SA”)” is written in register 113EH.
+(2) At the same time as (1) or within 30 seconds of (1), “7665H (“VE”)” is
+written in 113FH.
+
+NQ Series User’s Manual
+
+See the left column.
+--
+
+7
+Modbus/TCP Communication
+
+2
+
+45056
+
+0: Lower than 18 V
+18000 or higher: Voltage
+value
+0: Lower than 18 V
+18000 or higher: Voltage
+--
+thermocouple.
+
+Modbus/TCP Communication
+
+15
+B003
+B004
+B005
+B006
+B007
+B008
+B009
+B00A
+--
+ It is not possible to communicate with a higher-level device (EtherNet/IP, PROFINET,
+NQ-MP8L/EP4L/EP4A
+Modbus/TCP).
+If communication with a higher-level device is not successful, check the LED display shown below, and then implement
+countermeasures.
+Notation
+PWR
+
+Description
+Power supply
+
+LED status
+Green
+--
+
+IP address duplication
+Modbus/TCP watch dog time-out
+Red
+IP address setting switches set to
+Revise the IP address setting.
+“0.0.0.0”
+Blinking Blink command being executed
+Auto negotiation in progress or
+Red/
+Blinking standing by for IP address assignment green
+via DHCP/BootP
+• Check whether the power supply cable is connected correctly.

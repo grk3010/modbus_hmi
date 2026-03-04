@@ -5,6 +5,7 @@ from nicegui import ui, app
 
 from sensor_parser import SensorParser
 from modbus_client import ModbusClient
+from opcua_client import OpcUaClient
 
 # Paths
 SETTINGS_FILE = "hmi_settings.json"
@@ -15,6 +16,8 @@ settings = {"master_type": "NQ-MP8L (8 Ports)"}
 settings.update({str(i): "" for i in range(1, 9)})
 sensor_parser = SensorParser(iodd_dir=IODD_DIR)
 modbus_client = ModbusClient()
+opcua_client = OpcUaClient(settings)
+simulation_state = {}
 
 # Serve extracted images
 os.makedirs(IODD_DIR, exist_ok=True)
@@ -140,149 +143,156 @@ ui.add_head_html("""
         font-weight: bold;
         color: #4CAF50;
     }
+    .interactive-element {
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+    }
+    .interactive-element:hover {
+        transform: scale(1.15);
+        filter: drop-shadow(0 0 15px rgba(32, 201, 151, 0.8));
+        z-index: 100 !important;
+    }
+    .compressor-zone {
+        border-radius: 20px;
+        transition: all 0.3s;
+        border: 2px solid transparent;
+        background: radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 60%);
+        opacity: 0;
+    }
+    .compressor-zone:hover {
+        opacity: 1;
+        border: 2px solid #20c997;
+        box-shadow: 0 0 30px rgba(32, 201, 151, 0.3) inset;
+        cursor: pointer;
+    }
+    .live-badge {
+        background: rgba(0,0,0,0.7);
+        padding: 4px 8px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: bold;
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.1);
+        backdrop-filter: blur(4px);
+    }
 </style>
 """, shared=True)
 
 @ui.page('/')
 def index():
     with ui.header().classes('bg-dark text-white items-center q-pa-md shadow-2'):
-        ui.label('Industrial HMI - Live Dashboard').classes('text-h5 font-bold')
+        ui.label('Industrial HMI - Interactive Dashboard').classes('text-h5 font-bold tracking-wide')
         ui.space()
-        with ui.row().classes('items-center gap-2'):
-            global_status = ui.image('/iodd_assets/assets/disconnected.png').classes('w-6 h-6 object-contain')
-            ui.label('Modbus Master').classes('text-subtitle1 text-grey')
+        with ui.row().classes('items-center gap-4'):
+            with ui.row().classes('items-center gap-2'):
+                global_status = ui.image('/iodd_assets/assets/disconnected.png').classes('w-6 h-6 object-contain')
+                ui.label('Modbus Server').classes('text-subtitle1 text-grey')
         ui.space()
         ui.button('Configuration', icon='settings', on_click=lambda: ui.navigate.to('/config')).props('flat')
 
-    # Container for the dynamic cards
-    card_container = ui.row().classes('w-full q-pa-md justify-center items-start')
+    gp_pic = "/iodd_assets/extracted_KEYENCE_GP-MT_IO-Link_V1_0/KEYENCE_GP-MT_IO-Link_V1_0/KEYENCE-GP-MT-pic.png"
+    mp_pic = "/iodd_assets/extracted_mp_f/KEYENCE_MP-F_IO-Link_V1_0/KEYENCE-MP-F80-pic.png"
+
+    gp_ports = [p for p, t in settings.items() if p.isdigit() and "GP-M" in t]
+    mp_ports = [p for p, t in settings.items() if p.isdigit() and "MP-F" in t]
+    
+    # Fallback to sensible defaults if unconfigured
+    gp1 = gp_ports[0] if len(gp_ports) > 0 else "1"
+    gp2 = gp_ports[1] if len(gp_ports) > 1 else "2"
+    mp1 = mp_ports[0] if len(mp_ports) > 0 else "3"
+    mp2 = mp_ports[1] if len(mp_ports) > 1 else "4"
+    mp3 = mp_ports[2] if len(mp_ports) > 2 else "5"
 
     ui_elements = {}
 
-    def setup_cards():
-        card_container.clear()
-        ui_elements.clear()
-        with card_container:
-            for port_str, sensor_type in settings.items():
-                if port_str in ["master_type", "master_ip"] or "_" in port_str or not sensor_type:
-                    continue
-                
-                port_num = int(port_str)
-                custom_name = settings.get(f"{port_num}_name", "")
-                display_title = custom_name if custom_name else f"Port {port_num}"
-                
-                with ui.card().classes('dashboard-card q-ma-sm w-96 cursor-pointer').on('click', lambda p=port_num: ui.navigate.to(f'/sensor/{p}')):
-                    with ui.row().classes('w-full justify-between items-center'):
-                        with ui.row().classes('items-center gap-2'):
-                            port_status_icon = ui.image('/iodd_assets/assets/disconnected.png').classes('w-4 h-4 object-contain')
-                            ui.label(display_title).classes('text-h6 text-primary')
-                        ui.label(f"Port {port_num}").classes('text-caption text-grey')
-                        
-                    pic_path = sensor_parser.get_sensor_pic(sensor_type)
-                    icon_path = sensor_parser.get_sensor_icon(sensor_type)
-                    img_src = pic_path if pic_path else icon_path
-                    
-                    if img_src:
-                        rel_src = f"/iodd_assets/{os.path.relpath(img_src, os.path.abspath(IODD_DIR))}"
-                        with ui.row().classes('w-full justify-center q-mb-md bg-white rounded shadow-sm q-pa-sm'):
-                            ui.image(rel_src).classes('h-40 w-full').props('fit="contain"')
-                    else:
-                        ui.label(sensor_type).classes('text-subtitle1 text-bold q-mb-md text-center w-full')
-                    
-                    elements = {'port_status_icon': port_status_icon}
-                    temp_unit, pres_unit, flow_unit = get_effective_units(port_num)
-                    
-                    if "MP-F" in sensor_type:
-                        with ui.row().classes('w-full justify-between items-center q-mt-sm'):
-                            with ui.column().classes('items-center'):
-                                elements['temp_unit_lbl'] = ui.label(f"Temp ({temp_unit})").classes('text-caption')
-                                elements['temp_knob'] = ui.knob(0, min=-50, max=150, show_value=True).props('color="red" size="60px"')
-                            with ui.column().classes('items-center'):
-                                elements['pres_unit_lbl'] = ui.label(f"Pres ({pres_unit})").classes('text-caption')
-                                elements['pres_knob'] = ui.knob(0, min=0, max=10000, show_value=True).props('color="orange" size="60px"')
-                            with ui.column().classes('items-center'):
-                                elements['hum_unit_lbl'] = ui.label(f"RH (%)").classes('text-caption')
-                                elements['hum_knob'] = ui.knob(0, min=0, max=100, show_value=True).props('color="blue" size="60px"')
-                                
-                        ui.label("Flow Rate").classes('text-subtitle2 q-mt-md')
-                        elements['flow_bar'] = ui.linear_progress(value=0, show_value=False).props('color="blue" size="28px" track-color="dark"')
-                        with elements['flow_bar']:
-                            elements['flow_lbl'] = ui.label(f"0 {flow_unit}").classes('absolute-center text-white font-bold drop-shadow')
-                        
-                        with ui.row().classes('w-full justify-between items-center q-mt-sm'):
-                            ui.label("Accumulated:").classes('text-caption text-grey')
-                            elements['flow_tot_lbl'] = ui.label(f"0 {flow_unit}").classes('text-subtitle1 text-bold')
+    with ui.element('div').classes('w-full flex justify-center items-center q-pa-md'):
+        # Container
+        with ui.element('div').classes('relative w-full max-w-[1400px] shadow-2xl rounded-xl overflow-hidden bg-black/50 border border-gray-800'):
+            # Background
+            ui.image('/iodd_assets/assets/compressor_dashboard.png').classes('w-full h-auto block opacity-90')
+            
+            # Interactive Zones
+            # 1. Compressor
+            ui.element('div').classes('absolute compressor-zone z-10').style('top: 15%; left: 3%; width: 28%; height: 70%;').on('click', lambda: ui.navigate.to('/compressor'))
+            
+            # Compressor Status Tooltip
+            with ui.element('div').classes('absolute flex items-center gap-2 live-badge z-20').style('top: 25%; left: 8%;'):
+                ui.icon('power', color='green').classes('text-xl')
+                ui_elements['comp_status'] = ui.label('Ready')
 
-                    elif "GP-M" in sensor_type:
-                        with ui.row().classes('w-full justify-between items-center q-mt-md'):
-                            with ui.column().classes('items-center'):
-                                elements['pres_unit_lbl'] = ui.label(f"Pressure ({pres_unit})").classes('text-subtitle2')
-                                elements['pres_knob'] = ui.knob(0, min=0, max=10000, show_value=True).props('color="orange" size="100px"')
-                            with ui.column().classes('items-center'):
-                                elements['temp_unit_lbl'] = ui.label(f"Temperature ({temp_unit})").classes('text-subtitle2')
-                                elements['temp_knob'] = ui.knob(0, min=-50, max=300, show_value=True).props('color="red" size="100px"')
-                    else:
-                        elements['generic'] = ui.label("")
-                        
-                    ui_elements[port_num] = {'sensor_type': sensor_type, 'elements': elements}
+            # 2. GP-M010T #1 (Wet Tank Out)
+            with ui.element('div').classes('absolute flex flex-col items-center interactive-element z-20 cursor-pointer').style('top: 40%; left: 46%;').on('click', lambda: ui.navigate.to(f'/sensor/{gp1}')):
+                ui.image(gp_pic).classes('w-20 h-auto filter drop-shadow hover:brightness-125')
+                with ui.row().classes('live-badge q-mt-sm whitespace-nowrap'):
+                    ui_elements['gp1_val'] = ui.label('---')
+            
+            # 3. GP-M010T #2 (Dry Tank In)
+            with ui.element('div').classes('absolute flex flex-col items-center interactive-element z-20 cursor-pointer').style('top: 40%; left: 65%;').on('click', lambda: ui.navigate.to(f'/sensor/{gp2}')):
+                ui.image(gp_pic).classes('w-20 h-auto filter drop-shadow hover:brightness-125')
+                with ui.row().classes('live-badge q-mt-sm whitespace-nowrap'):
+                    ui_elements['gp2_val'] = ui.label('---')
 
+            # 4. MP-FN80 #1 (Outlet 1)
+            with ui.element('div').classes('absolute flex flex-row items-center interactive-element z-20 cursor-pointer').style('top: 20%; left: 84%;').on('click', lambda: ui.navigate.to(f'/sensor/{mp1}')):
+                ui.image(mp_pic).classes('w-16 h-auto filter drop-shadow hover:brightness-125')
+                with ui.column().classes('live-badge q-ml-sm'):
+                    ui_elements['mp1_flow'] = ui.label('---')
+                    ui_elements['mp1_pres'] = ui.label('---')
+
+            # 5. MP-FN80 #2 (Outlet 2)
+            with ui.element('div').classes('absolute flex flex-row items-center interactive-element z-20 cursor-pointer').style('top: 45%; left: 84%;').on('click', lambda: ui.navigate.to(f'/sensor/{mp2}')):
+                ui.image(mp_pic).classes('w-16 h-auto filter drop-shadow hover:brightness-125')
+                with ui.column().classes('live-badge q-ml-sm'):
+                    ui_elements['mp2_flow'] = ui.label('---')
+                    ui_elements['mp2_pres'] = ui.label('---')
+
+            # 6. MP-FN80 #3 (Outlet 3)
+            with ui.element('div').classes('absolute flex flex-row items-center interactive-element z-20 cursor-pointer').style('top: 70%; left: 84%;').on('click', lambda: ui.navigate.to(f'/sensor/{mp3}')):
+                ui.image(mp_pic).classes('w-16 h-auto filter drop-shadow hover:brightness-125')
+                with ui.column().classes('live-badge q-ml-sm'):
+                    ui_elements['mp3_flow'] = ui.label('---')
+                    ui_elements['mp3_pres'] = ui.label('---')
+                    
     def update_cards():
         if modbus_client.master_online:
             global_status.set_source('/iodd_assets/assets/connected.png')
         else:
             global_status.set_source('/iodd_assets/assets/disconnected.png')
             
-        for port_num, card_data in ui_elements.items():
-            data = modbus_client.port_data.get(port_num, {})
-            port_online = modbus_client.port_status.get(port_num, False)
-            sensor_type = card_data['sensor_type']
-            elements = card_data['elements']
+        # Update Compressor status
+        if opcua_client and opcua_client.connected:
+            comp_state = "RUNNING" if opcua_client.data.get("running") else "STOPPED"
+            ui_elements['comp_status'].set_text(f"{comp_state} | {opcua_client.data.get('pressure', 0):.1f} kPa")
+        else:
+            ui_elements['comp_status'].set_text("OFFLINE")
             
-            icon = elements['port_status_icon']
-            if port_online:
-                icon.set_source('/iodd_assets/assets/connected.png')
-            else:
-                icon.set_source('/iodd_assets/assets/disconnected.png')
-            
-            # If not online, maybe freeze or dim? Or just show 0s. Let's just update using whatever was last buffered.
-            if not data and not port_online:
-                continue
-                
-            temp_unit, pres_unit, flow_unit = get_effective_units(port_num)
-            
-            if "MP-F" in sensor_type:
-                flow = apply_unit_scaling(data.get('1FlowInst', 0), 'flow', port_num)
-                flow_tot = apply_unit_scaling(data.get('1FlowTotal', 0), 'flow_total', port_num)
-                pressure = apply_unit_scaling(data.get('1Pressure', 0), 'pres', port_num)
-                temp = apply_unit_scaling(data.get('1Temperature', 0) / 10.0, 'temp', port_num)
-                hum = data.get('1Humidity', 0) / 10.0
-                max_flow = float(settings.get(f"{port_num}_max_flow", 1000.0))
-                
-                elements['pres_unit_lbl'].set_text(f"Pres ({pres_unit})")
-                elements['temp_unit_lbl'].set_text(f"Temp ({temp_unit})")
-                
-                elements['temp_knob'].value = round(temp, 1)
-                elements['pres_knob'].value = round(pressure, 1)
-                elements['hum_knob'].value = round(hum, 1)
-                
-                elements['flow_bar'].value = min(flow / max(max_flow, 1.0), 1.0)
-                elements['flow_lbl'].set_text(f"{round(flow, 1)} {flow_unit}")
-                elements['flow_tot_lbl'].set_text(f"{round(flow_tot, 1)} {flow_unit}")
-                
-            elif "GP-M" in sensor_type:
-                pressure = apply_unit_scaling(data.get('Pressure', 0), 'pres', port_num)
-                temp = apply_unit_scaling(data.get('Temp', 0) / 10.0, 'temp', port_num)
-                
-                elements['pres_unit_lbl'].set_text(f"Pressure ({pres_unit})")
-                elements['temp_unit_lbl'].set_text(f"Temperature ({temp_unit})")
-                
-                elements['pres_knob'].value = round(pressure, 1)
-                elements['temp_knob'].value = round(temp, 1)
-            else:
-                elements['generic'].set_text(", ".join([f"{k}: {v}" for k, v in data.items()]))
+        def _get_val(p, key, unit, v_type):
+            data = modbus_client.port_data.get(int(p), {})
+            if not data: return '---'
+            val = apply_unit_scaling(data.get(key, 0), v_type, int(p))
+            if v_type in ('temp', 'hum'): val /= 10.0
+            return f"{val:.1f} {unit}"
 
-    # Initial build and periodic update
-    setup_cards()
+        # Get units
+        t_gp1, p_gp1, _ = get_effective_units(int(gp1))
+        t_gp2, p_gp2, _ = get_effective_units(int(gp2))
+        _, p_mp1, f_mp1 = get_effective_units(int(mp1))
+        _, p_mp2, f_mp2 = get_effective_units(int(mp2))
+        _, p_mp3, f_mp3 = get_effective_units(int(mp3))
+
+        # Update sensors visually if online
+        ui_elements['gp1_val'].set_text(_get_val(gp1, 'Pressure', p_gp1, 'pres'))
+        ui_elements['gp2_val'].set_text(_get_val(gp2, 'Pressure', p_gp2, 'pres'))
+        
+        ui_elements['mp1_flow'].set_text(_get_val(mp1, '1FlowInst', f_mp1, 'flow'))
+        ui_elements['mp1_pres'].set_text(_get_val(mp1, '1Pressure', p_mp1, 'pres'))
+        
+        ui_elements['mp2_flow'].set_text(_get_val(mp2, '1FlowInst', f_mp2, 'flow'))
+        ui_elements['mp2_pres'].set_text(_get_val(mp2, '1Pressure', p_mp2, 'pres'))
+        
+        ui_elements['mp3_flow'].set_text(_get_val(mp3, '1FlowInst', f_mp3, 'flow'))
+        ui_elements['mp3_pres'].set_text(_get_val(mp3, '1Pressure', p_mp3, 'pres'))
+
     ui.timer(1.0, update_cards)
 
 @ui.page('/sensor/{port_id}')
@@ -372,16 +382,34 @@ def sensor_page(port_id: str):
             data = modbus_client.port_data.get(port_num, {})
             port_online = modbus_client.port_status.get(port_num, False)
             
+            sim_state = simulation_state.get(port_num, {'mode': 'real'})
+            is_simulating = sim_state['mode'] == 'simulating'
+            if is_simulating:
+                import random
+                if "MP-F" in sensor_type:
+                    data = {
+                        '1FlowInst': random.uniform(10, 500) * 10,
+                        '1FlowTotal': random.uniform(100, 5000),
+                        '1Pressure': random.uniform(50, 800),
+                        '1Temperature': random.uniform(200, 800),
+                        '1Humidity': random.uniform(300, 700)
+                    }
+                elif "GP-M" in sensor_type:
+                    data = {
+                        'Pressure': random.uniform(0, 5000),
+                        'Temp': random.uniform(200, 800)
+                    }
+
             if port_online:
                 sensor_status_icon.set_source('/iodd_assets/assets/connected.png')
                 sensor_status_lbl.set_text('Sensor Connected')
                 sensor_status_lbl.classes(replace='text-grey', add='text-green')
             else:
                 sensor_status_icon.set_source('/iodd_assets/assets/disconnected.png')
-                sensor_status_lbl.set_text('Sensor Disconnected')
+                sensor_status_lbl.set_text('Sensor Disconnected (Simulating)' if is_simulating else 'Sensor Disconnected')
                 sensor_status_lbl.classes(replace='text-green', add='text-grey')
                 
-            if not data and not port_online:
+            if not data and not port_online and not is_simulating:
                 return
             
             temp_unit, pres_unit, flow_unit = get_effective_units(port_num)
@@ -469,35 +497,35 @@ def config_page():
             with ui.row().classes('w-full justify-between items-center'):
                 ui.label("Master Configuration").classes('text-h6')
                 
-                async def handle_discover():
-                    try:
-                        max_ports = 8 if "8" in settings.get("master_type", "NQ-MP8L") else 4
-                        discovered = await modbus_client.auto_discover(max_ports=max_ports)
-                        if discovered:
-                            for p, sensor in discovered.items():
-                                settings[str(p)] = sensor
-                            save_settings()
-                            port_mapping_ui.refresh()
-                            ui.notify("Sensors Auto-Discovered!", type="positive", icon="search")
-                        else:
-                            ui.notify("No sensors found or mapped.", type="warning")
-                    except Exception as e:
-                        ui.notify(f"Discovery Error: {e}", type="negative")
-
-                ui.button("Auto Discover", icon="search", on_click=handle_discover, color="amber-8").classes('rounded shadow')
+                # Note: Auto-discover via Modbus ISDU is unsupported by Keyence documentation.
+                # Sensors must be manually configured below.
             
+            with ui.expansion('OPC-UA Compressor Settings', icon='settings_input_component').classes('w-full bg-dark rounded q-my-sm'):
+                ui.input(label="OPC-UA Server IP").classes('w-full').bind_value(settings, "opcua_ip").on('update:model-value', save_settings)
+                ui.input(label="Pressure Node ID").classes('w-full').bind_value(settings, "opcua_node_pressure").on('update:model-value', save_settings)
+                ui.input(label="Temp Node ID").classes('w-full').bind_value(settings, "opcua_node_temp").on('update:model-value', save_settings)
+                ui.input(label="Hours Node ID").classes('w-full').bind_value(settings, "opcua_node_hours").on('update:model-value', save_settings)
+                ui.input(label="State Node ID").classes('w-full').bind_value(settings, "opcua_node_state").on('update:model-value', save_settings)
+                ui.input(label="Start Node ID").classes('w-full').bind_value(settings, "opcua_node_start").on('update:model-value', save_settings)
+                ui.input(label="Stop Node ID").classes('w-full').bind_value(settings, "opcua_node_stop").on('update:model-value', save_settings)
+
             @ui.refreshable
             def port_mapping_ui():
                 master_type = settings.get("master_type", "NQ-MP8L (8 Ports)")
                 num_ports = 8 if "8" in master_type else 4
                 
                 for i in range(1, num_ports + 1):
-                    with ui.row().classes('w-full items-center justify-between q-my-sm'):
-                        with ui.column().classes('gap-0'):
+                    with ui.row().classes('w-full items-center justify-between q-my-sm gap-2'):
+                        with ui.column().classes('gap-0 shrink-0 w-24'):
                             ui.label(f"Port {i}").classes('text-bold')
-                            ui.label(f"Reg {1000 + (i-1)*50}").classes('text-caption text-grey')
+                            
+                        with ui.column().classes('gap-0 w-20 shrink-0'):
+                            addr_input = ui.number(label="Address", value=settings.get(f"{i}_modbus_address", (i-1)*50), format="%d", on_change=save_settings)
+                            addr_input.bind_value(settings, f"{i}_modbus_address")
+                            len_input = ui.number(label="Length", value=settings.get(f"{i}_modbus_length", 50), format="%d", on_change=save_settings)
+                            len_input.bind_value(settings, f"{i}_modbus_length")
                         
-                        name_input = ui.input(placeholder="Sensor Name").classes('w-32')
+                        name_input = ui.input(placeholder="Sensor Name").classes('w-32 shrink-0')
                         name_input.bind_value(settings, f"{i}_name")
 
                         def get_icon_src(pid):
@@ -506,29 +534,62 @@ def config_page():
                                 return f"/iodd_assets/{os.path.relpath(ic, os.path.abspath(IODD_DIR))}"
                             return ""
 
-                        with ui.row().classes('items-center gap-4'):
+                        with ui.column().classes('items-end'):
                             img = ui.image().classes('w-12 h-12 object-contain bg-white rounded shadow-sm')
                             img.bind_source_from(settings, str(i), backward=get_icon_src)
                             img.bind_visibility_from(settings, str(i), backward=lambda pid: bool(get_icon_src(pid)))
                             
                             select = ui.select(available_sensors, value=settings.get(str(i), ""), label="Sensor Type").classes('w-48')
                             select.bind_value(settings, str(i))
+                            select.on('update:model-value', save_settings)
 
             with ui.row().classes('w-full items-center justify-between'):
                 ip_label = ui.label()
                 ip_label.bind_text_from(settings, 'master_ip', backward=lambda ip: f"Current Master IP: {ip if ip else '127.0.0.1'}")
                 
-                async def scan_for_master():
-                    ui.notify("Scanning network for IO-Link Masters...")
-                    devices = await modbus_client.scan_network()
-                    if devices:
-                        settings["master_ip"] = devices[0]
-                        # In a real app we would probe the master model via Modbus register here
-                        settings["master_type"] = "NQ-MP8L (8 Ports)" if "8" in devices[0] else "NQ-MP8L (8 Ports)"
-                        ui.notify(f"Found Master at {devices[0]}")
-                        port_mapping_ui.refresh()
-                    else:
-                        ui.notify("No masters found on port 502.")
+                def get_network_interfaces():
+                    import subprocess
+                    interfaces = []
+                    try:
+                        output = subprocess.check_output("ip -o addr show", shell=True).decode()
+                        for line in output.split("\n"):
+                            if not line: continue
+                            parts = line.split()
+                            if len(parts) >= 4 and parts[2] == "inet":
+                                interfaces.append({"iface": parts[1], "ip": parts[3]})
+                    except Exception:
+                        pass
+                    if not interfaces:
+                        interfaces.append({"iface": "localhost", "ip": "127.0.0.1/8"})
+                    return interfaces
+
+                def prompt_scan_network():
+                    interfaces = get_network_interfaces()
+                    options = {iface['ip']: f"{iface['iface']} ({iface['ip']})" for iface in interfaces}
+                    
+                    with ui.dialog() as dialog, ui.card().classes('w-96'):
+                        ui.label("Select Network Interface to Scan").classes('text-h6 font-bold q-mb-md')
+                        selected_iface = ui.select(options, value=list(options.keys())[0], label="Interface").classes('w-full q-mb-md')
+                        
+                        async def perform_scan():
+                            dialog.close()
+                            subnet = selected_iface.value
+                            ui.notify(f"Scanning {subnet} for IO-Link Masters...", type="info")
+                            devices = await modbus_client.scan_network(base_ip=subnet)
+                            if devices:
+                                settings["master_ip"] = devices[0]
+                                settings["master_type"] = "NQ-MP8L (8 Ports)" if "8" in devices[0] else "NQ-MP8L (8 Ports)"
+                                ui.notify(f"Found Master at {devices[0]}", type="positive")
+                                save_settings()
+                                port_mapping_ui.refresh()
+                            else:
+                                ui.notify("No masters found on port 502.", type="warning")
+                        
+                        with ui.row().classes('w-full justify-end q-mt-md gap-4'):
+                            ui.button("Cancel", on_click=dialog.close).props('flat')
+                            ui.button("Scan", on_click=perform_scan).props('color="primary"')
+                            
+                    dialog.open()
 
                 def prompt_manual_ip():
                     with ui.dialog() as dialog, ui.card():
@@ -545,7 +606,7 @@ def config_page():
                     dialog.open()
 
                 with ui.row():
-                    ui.button(icon='search', on_click=scan_for_master).props('flat round')
+                    ui.button(icon='search', on_click=prompt_scan_network).props('flat round')
                     ui.button(icon='edit', on_click=prompt_manual_ip).props('flat round')
 
             master_options = ["NQ-MP8L (8 Ports)", "NQ-EP4L (4 Ports)"]
@@ -604,6 +665,8 @@ def config_page():
 
 # Run the Modbus polling in the background when the app starts
 app.on_startup(lambda: asyncio.create_task(modbus_client.poll_ports(settings, sensor_parser)))
+if opcua_client:
+    app.on_startup(lambda: asyncio.create_task(opcua_client.connect_and_poll()))
 
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(port=8080, dark=True, title="Industrial HMI")

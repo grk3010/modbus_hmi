@@ -12,8 +12,8 @@ class ModbusClient:
         self.port = port
         self.client = None
         self.connected = False
-        # Each port has 50 words reserved. Port 1 is start_address=1000
-        self.start_address = 1000
+        # Each port has 50 words reserved. Port 1 is start_address=0 by default for NQ-EP4L
+        self.start_address = 0
         self.words_per_port = 50
         
         # Store latest decoded data for UI
@@ -36,23 +36,35 @@ class ModbusClient:
 
     async def scan_network(self, base_ip="192.168.1.0/24"):
         """Scans the network for Modbus devices responding on port 502."""
+        import ipaddress
         found_devices = []
-        # Basic implementation: try common IPs or a quick ping sweep if base_ip is given.
-        # For this MVP, we will just try a few local addresses as a proof of concept
-        # or rely on manual entry for strict environments.
-        test_ips = ["127.0.0.1", "192.168.1.100", "192.168.1.101", "10.0.0.100"]
+        
+        try:
+            if '/' not in base_ip:
+                base_ip += '/24'
+            network = ipaddress.ip_network(base_ip, strict=False)
+            if network.num_addresses > 1024:
+                # If the subnet is huge (like /8), restrict to the /24 block of the given IP
+                ip_part = base_ip.split('/')[0]
+                network = ipaddress.ip_network(f"{ip_part}/24", strict=False)
+            test_ips = [str(ip) for ip in network.hosts()]
+        except Exception:
+            # Fallback if invalid base_ip format
+            test_ips = ["127.0.0.1", "192.168.1.100", "192.168.1.101", "10.0.0.100"]
+        
+        sem = asyncio.Semaphore(50)  # Limit concurrent connections so we don't exhaust file descriptors
         
         async def check_ip(ip):
-            try:
-                # Short timeout for scanning
-                client = AsyncModbusTcpClient(ip, port=502, timeout=1.0)
-                connected = await client.connect()
-                if connected:
-                    # Attempt to read generic device ID or just assume it's a target if 502 is open
-                    found_devices.append(ip)
-                    client.close()
-            except Exception:
-                pass
+            async with sem:
+                try:
+                    # Short timeout for scanning
+                    client = AsyncModbusTcpClient(ip, port=502, timeout=0.5)
+                    connected = await client.connect()
+                    if connected:
+                        found_devices.append(ip)
+                        client.close()
+                except Exception:
+                    pass
                 
         tasks = [check_ip(ip) for ip in test_ips]
         await asyncio.gather(*tasks)
@@ -60,39 +72,11 @@ class ModbusClient:
 
     async def auto_discover(self, max_ports=8):
         """Attempts to read Device ID / Vendor Name from IO-Link ports to map connected sensors."""
-        discovered = {}
-        
-        # In a production environment, this would read specific Modbus Holding Registers 
-        # (e.g. 4000+ for Keyence NQ Diagnostics) to extract the IO-Link Device ID 
-        # for each port and match it with the IODD parser.
-        if not self.connected:
-            logger.info("Hardware offline. Using simulated auto-discovery mapping.")
-            await asyncio.sleep(1.2) # Simulate network polling delay
-            # Fallback mock using previously configured test setup
-            discovered = {
-                1: "GP-M010T",
-                2: "GP-M010T",
-                3: "MP-FR80/MP-FG80/MP-FN80",
-                4: "MP-FR80/MP-FG80/MP-FN80"
-            }
-            return discovered
-
-        try:
-            # Poll each port's diagnostic block (Assuming 4000 range for Keyence ISDU)
-            for port in range(1, max_ports + 1):
-                address = 4000 + ((port - 1) * 50)
-                res = await self.client.read_holding_registers(address, 10, timeout=0.5)
-                # Parse VendorID/DeviceID and map to parser...
-        except Exception as e:
-            logger.error(f"Auto-discover error: {e}")
-            
-        # Return fallback if actual hardware mapping logic is untestable
-        return {
-            1: "GP-M010T",
-            2: "GP-M010T",
-            3: "MP-FR80/MP-FG80/MP-FN80",
-            4: "MP-FR80/MP-FG80/MP-FN80"
-        }
+        # For Modbus-based Keyence masters, ISDU (Index 0x0012 to 0x0014 for VendorName/ProductID) 
+        # requires a complex command-response messaging sequence over holding registers.
+        # It is not possible to execute this implicitly without disrupting potential process data
+        # or requiring specific acyclic polling structures.
+        raise Exception("Auto-identifying connected IO-Link devices via Modbus is not currently supported for this master. Please manually select the connected sensors from the dropdown.")
 
     def decode_payload(self, raw_registers, sensor_map):
         """
@@ -106,9 +90,16 @@ class ModbusClient:
         if not raw_registers or not sensor_map:
             return {}
 
+        # Pad registers to match the sensor's maximum bit offset map
+        max_bit = max([v["bit_offset"] + v["bit_length"] for v in sensor_map.values()]) if sensor_map else 0
+        expected_words = (max_bit + 15) // 16
+        padded_registers = list(raw_registers)
+        if len(padded_registers) < expected_words:
+            padded_registers.extend([0] * (expected_words - len(padded_registers)))
+
         # Convert registers to a single byte stream, assuming Big Endian for Modbus TCP
         # pymodbus returns registers as ints, we pack them into bytes
-        payload_bytes = b"".join(struct.pack(">H", reg) for reg in raw_registers)
+        payload_bytes = b"".join(struct.pack(">H", reg) for reg in padded_registers)
         total_bits = len(payload_bytes) * 8
 
         decoded_data = {}
@@ -184,18 +175,20 @@ class ModbusClient:
             max_ports = 8 if "8" in master_type else 4
 
             for port_str, product_id in hmi_settings.items():
-                if port_str in ["master_type", "master_ip"] or not product_id:
+                if port_str in ["master_type", "master_ip"] or "_" in port_str or not product_id:
                     continue
                     
                 port_num = int(port_str)
                 if port_num > max_ports:
                     continue
 
-                address = self.start_address + ((port_num - 1) * self.words_per_port)
+                addr_default = self.start_address + ((port_num - 1) * self.words_per_port)
+                address = int(hmi_settings.get(f"{port_num}_modbus_address", addr_default))
+                count = int(hmi_settings.get(f"{port_num}_modbus_length", self.words_per_port))
                 
                 try:
-                    # Read 50 registers per port (covers max IO-Link process data)
-                    response = await self.client.read_holding_registers(address, self.words_per_port)
+                    # Read defined registers per port
+                    response = await self.client.read_holding_registers(address=address, count=count)
                     if not response.isError():
                         sensor_map = sensor_parser.get_sensor_map(product_id)
                         decoded = self.decode_payload(response.registers, sensor_map)

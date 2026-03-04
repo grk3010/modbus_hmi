@@ -1,0 +1,39 @@
+import binascii
+
+with open('dump.hex') as f:
+    lines = f.readlines()
+
+for line in lines:
+    line = line.strip()
+    # Basic Ethernet parsing
+    # Dest MAC (6), Src MAC (6), EtherType (2)
+    # 14 bytes = 28 hex chars
+    if len(line) < 28: continue
+    
+    eth_type = line[24:28]
+    if eth_type == '0800': # IPv4
+        # IPv4 Header
+        # min 20 bytes = 40 hex chars
+        ip_payload = line[28:]
+        if len(ip_payload) < 40: continue
+        
+        protocol = ip_payload[18:20]
+        src_ip = ".".join([str(int(ip_payload[24:26], 16)), str(int(ip_payload[26:28], 16)), str(int(ip_payload[28:30], 16)), str(int(ip_payload[30:32], 16))])
+        dst_ip = ".".join([str(int(ip_payload[32:34], 16)), str(int(ip_payload[34:36], 16)), str(int(ip_payload[36:38], 16)), str(int(ip_payload[38:40], 16))])
+        
+        if '172.16.1.90' in [src_ip, dst_ip]:
+            # TCP/UDP payload
+            if protocol == '06': # TCP
+                tcp_payload = ip_payload[40:]
+                # Header length is dynamic, simplistic parse: skip 20 bytes (40 hex chars) 
+                if len(tcp_payload) >= 40:
+                    data = tcp_payload[40:]
+                    if data:
+                        print(f"TCP Data {src_ip} -> {dst_ip}: {data}")
+            elif protocol == '11': # UDP
+                udp_payload = ip_payload[40:]
+                if len(udp_payload) >= 16:
+                    data = udp_payload[16:]
+                    if data:
+                        print(f"UDP Data {src_ip} -> {dst_ip}: {data}")
+

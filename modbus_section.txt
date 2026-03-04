@@ -1,0 +1,3989 @@
+
+6
+
+EtherNet/IP
+Communication
+
+NQ-EP4A
+
+7
+
+Modbus/TCP
+Communication
+
+8
+
+PROFINET
+Communication
+
+IO-Link I/O Module
+
+9
+
+Appendix
+
+NQ-EP4L
+TM
+
+EtherNet/IP
+
+Temperature/Analog Input Module
+
+NQ-IL8P
+User’s Manual
+
+Introduction
+This manual describes the handling, operation, and
+precautions for the following products.
+• Multi-Protocol IO-Link Master Module NQ-MP8L
+• EtherNet/IPTM IO-Link Master Module NQ-EP4L
+• EtherNet/IPTM Temperature/Analog Input Module
+NQ-EP4A
+• IO-Link I/O Module NQ-IL8P
+
+Symbols
+This manual uses the following symbols to alert readers to
+important messages. Be sure to read these messages
+carefully.
+Indicates a hazardous situation which, if
+DANGER
+
+not avoided, will result in death or serious
+injury.
+
+Read this manual carefully and thoroughly understand its
+contents in order to take full advantage of the performance
+and functions of these products. Keep this manual in a
+safe place for future reference. Be sure to send this manual
+to the end user of the product.
+
+Indicates a hazardous situation which, if
+WARNING
+
+not avoided, could result in death or
+serious injury.
+Indicates a hazardous situation which, if
+
+CAUTION
+
+not avoided, could result in minor or
+moderate injury.
+Indicates a situation which, if not avoided,
+could result in product damage as well as
+
+NOTICE
+
+property damage.
+
+Important
+
+Indicates cautions and limitations that
+must be followed during operation.
+
+Point
+
+Indicates additional information on
+proper operation.
+
+Reference
+
+Indicates useful information or information that
+aids understanding of text descriptions.
+Indicates items and pages in this manual
+being referenced.
+
+Safety Precautions
+
+ Precautions for wiring
+
+• Do not use this product with the purpose
+of protecting the human body or a part of
+the human body.
+
+DANGER
+
+• Do not use this product in an application
+that may cause death, serious injury or
+serious property damage due to a failure
+with this product occurring, such as
+nuclear power plants, on aircrafts, trains,
+ships, or vehicles, used within medical
+equipment, playground equipment, roller
+--
+Error codes....................................................................................................Page 6-20
+Communication with IO-Link Sensors (Class ID: 85H)..................................Page 6-21
+IO-Link Port (Class ID: 304H)........................................................................Page 6-23
+IO-Link Event (Class ID: 305H) .....................................................................Page 6-24
+Digital I/O (Class ID: 306H (MP8L), 303H (EP4L))........................................Page 6-24
+Power Supply Control (Class ID: 307H) ........................................................Page 6-26
+Analog Input (Class ID: 302H) ......................................................................Page 6-26
+Gateway (Class ID: 300H).............................................................................Page 6-28
+Identify Object (Class ID: 1H) .......................................................................Page 6-28
+
+Chapter 7 Modbus/TCP Communication
+7-1 NQ Series Modbus/TCP Communication Function .............................................Page 7-2
+Overview .........................................................................................................Page 7-2
+Modbus/TCP Communication Specifications..................................................Page 7-3
+7-2 Communication Settings .....................................................................................Page 7-4
+NQ Series Settings ..........................................................................................Page 7-4
+PLC and Controller Settings............................................................................Page 7-4
+Command Formats..........................................................................................Page 7-4
+7-3 Register Mapping................................................................................................Page 7-6
+NQ-MP8L/EP4L ...............................................................................................Page 7-6
+
+8
+
+NQ Series User’s Manual
+
+Table of Contents
+
+NQ-EP4A .......................................................................................................Page 7-15
+
+Chapter 8 PROFINET Communication
+8-1 NQ-MP8L PROFINET Communication Function .................................................Page 8-2
+Overview .........................................................................................................Page 8-2
+NQ Series PROFINET Communication Specifications ....................................Page 8-3
+What Can Be Performed with PROFINET Communication..............................Page 8-3
+8-2 Communication Settings .....................................................................................Page 8-4
+8-3 Parameter Settings..............................................................................................Page 8-5
+8-4 Cyclic Communication ........................................................................................Page 8-6
+Slot Assignment ..............................................................................................Page 8-6
+Slot 1: Basic ....................................................................................................Page 8-7
+Slots 2 to 9: Port configuration generic ...........................................................Page 8-7
+Slot 10: Diagnostics ........................................................................................Page 8-8
+Slot 11: IO-Link Events ....................................................................................Page 8-9
+Slot 12: VAUX control ......................................................................................Page 8-9
+Slot 13: Module status...................................................................................Page 8-10
+8-5 Acyclic Communication ....................................................................................Page 8-11
+Device User Data ..........................................................................................Page 8-11
+8-6 PROFINET Diagnostic Information ....................................................................Page 8-12
+8-7 IO-Link Function Blocks ....................................................................................Page 8-13
+Input Variables ..............................................................................................Page 8-13
+Output Variables ...........................................................................................Page 8-13
+
+Chapter 9 Appendix
+Analog input data format.................................................................................Page 9-2
+NQ-IL8P Parameters .....................................................................................Page 9-11
+Output File Formats.......................................................................................Page 9-14
+Troubleshooting ............................................................................................Page 9-16
+Data Update Time .........................................................................................Page 9-19
+
+NQ Series User’s Manual
+
+9
+
+Table of Contents
+
+10
+
+NQ Series User’s Manual
+
+1
+1
+Before Operation
+
+Before Operation
+
+This chapter describes the contents that you should know before using this product, including
+the package contents and an overview of the NQ Series.
+
+1-1
+
+Overview of the NQ Series.................................................................................. Page 1-2
+
+1-2
+
+Checking the Package Contents........................................................................ Page 1-3
+
+1-3
+
+Additional Parts List............................................................................................ Page 1-4
+
+1-4
+
+Part Names and Functions ................................................................................. Page 1-7
+
+1-5
+
+Procedure Prior to Operation ........................................................................... Page 1-10
+
+NQ Series User’s Manual
+
+1-1
+
+1-1
+
+Overview of the NQ Series
+
+The NQ Series is an IO-Link master module and a temperature / analog input module that supports the main industrial
+
+1
+
+Ethernet protocols such as EtherNet/IP, PROFINET, and Modbus/TCP.
+
+Before Operation
+
+The NQ Series has two power supply ports and two Ethernet ports, and each module can be connected in a daisy chain.
+Along with this, I/O modules are available for connecting analog input modules and general-purpose I/O devices. These I/
+O modules make it possible to use data with simplified wiring and communication while using existing devices.
+The NQ Series also boasts IP65/67/69K enclosure ratings for use in a wide range of environments.
+IO-Link is a communication interface that complies with the international standard IEC 61131-9 and does not require a
+
+Reference
+
+field bus be used for sensors and actuators. IO-Link utilizes conventional sensor and actuator cables / wires for
+communication, thereby enabling communication with sensors and actuators in a one to one manner.
+
+NQ-MP8L
+
+NQ-MP8L
+Max 10 m
+
+Max 10 m
+
+*1
+
+*1
+
+Max 20 m
+
+General-purpose I/O device
+
+IO-Link device
+
+*3
+
+OP-88458
+Max 10 m*2
+
+Max 20 m
+
+Max 10 m*2
+
+NQ-IL8P
+NQ-EP4L
+NQ-EP4A
+
+General-purpose
+I/O device
+*3
+
+NQ-EP4L
+Max 10 m*1
+
+IO-Link device
+
+*3
+
+General-purpose I/O device
+
+OP-88458
+
+Max 10 m*2
+
+NQ Sensor
+Monitor
+
+NQ-EP4L
+NQ-EP4A
+
+NQ-EP4A
+Max 10 m
+
+*1
+
+Max 30 m
+
+Thermocouple / resistance
+temperature detector /
+Voltage or current device
+
+*4
+
+Modbus/TCP
+
+Power supply
+cable
+
+Max 10 m*2
+
+Ethernet cable
+
+IO-Link communication (maximum cable
+length: 20 m)
+
+Sensor Cable
+
+*1
+
+Restriction due to the length of the connector cables included in KEYENCE’s product lineup. This depends on the number of
+
+*2
+
+Restriction due to the length of the connector cables included in KEYENCE’s product lineup. This complies with the Ethernet
+
+*3
+
+The allowable extension distance depends on the devices.
+
+*4
+
+PROFINET is only available with the NQ-MP8L.
+
+connected units and the current when connected through the terminal block.
+specifications when connected through a hub or similar device.
+
+1-2
+
+NQ Series User’s Manual
+
+1-2
+
+Checking the Package Contents
+
+Multi-Protocol IO-Link Master Module
+
+EtherNet/IPTM Temperature / Analog Input Module
+
+NQ-MP8L
+
+NQ-EP4A
+Signal label sheet × 1
+
+Main unit × 1
+
+(set of 10 sheets)
+
+M12 waterproof cap × 8
+
+(set of 10 sheets)
+
+Instruction manual × 1
+
+(Separate M12 waterproof caps are attached to power supply port OUT
+and Ethernet port 2.)
+
+M12 waterproof cap × 4
+
+IO-Link I/O Module
+
+NQ-EP4L
+
+NQ-IL8P
+Signal label sheet × 1
+
+Main unit × 1
+
+(set of 10 sheets)
+
+M12 waterproof cap × 4
+
+Instruction manual × 1
+
+(Separate M8 waterproof caps are attached to power supply port OUT
+and Ethernet port 2.)
+
+EtherNet/IPTM IO-Link Master Module
+
+Main unit × 1
+
+Signal label sheet × 1
+
+Before Operation
+
+Main unit × 1
+
+1
+
+Signal label sheet × 1
+(set of 9 sheets)
+
+Instruction manual × 1
+
+M12 waterproof cap × 8
+--
+Status of
+communication with
+the higherlevel unit
+
+BUS
+
+Red
+
+Lit
+
+Modbus/TCP watch dog time-out
+IP address setting switches set to “0.0.0”
+
+Green
+Orange
+-
+
+Auto negotiation in progress or standing
+Blinking by for IP address assignment via DHCP/
+BootP
+Unlit
+
+Power supply OFF
+
+Lit
+
+Connection established (100 Mbps)
+
+0, 2, 4,
+6, 8, 10,
+12, 14
+
+Pin 4
+operation
+status
+
+Unlit
+
+No connection
+IO-Link connection enabled, process
+data enabled
+
+Blinking
+
+IO-Link connection enabled, process
+data disabled
+
+Lit
+
+No IO-Link connection, process data
+disabled
+
+Unlit
+
+No IO-Link connection, diagnostic
+information disabled
+
+Digital input mode
+
+Pin 2
+1, 3, 5, 7 operation
+status
+
+Green
+
+Lit
+
+Input ON
+
+-
+
+Unlit
+
+Input OFF
+
+Green
+
+Lit
+
+Input or output ON
+
+Lit
+
+Output overcurrent
+
+Red
+
+Unlit
+
+Input or output OFF
+
+Green
+
+Lit
+
+Normal V2 (pin 2) power voltage
+
+Lit
+
+V2 (pin 2) power supply overload / short
+circuit
+
+Blinking
+
+V1 (pin 1) power supply overload / short
+circuit
+
+Class B port
+power
+supply
+
+--
+green
+
+Green
+Orange
+
+Unlit
+
+Lit
+
+IP address duplication
+Modbus/TCP watch dog time-out
+
+Auto negotiation in progress or standing
+Blinking by for IP address assignment via DHCP/
+BootP
+Unlit
+
+Power supply OFF
+
+Lit
+
+Connection established (100 Mbps)
+
+Blinking Communication occurring (100 Mbps)
+Lit
+
+Connection established (10 Mbps)
+
+Blinking Communication occurring (10 Mbps)
+
+-
+
+Unlit
+
+No connection
+
+Green
+
+Blinking
+
+IO-Link connection enabled, process
+data enabled
+
+Blinking
+
+IO-Link connection enabled, process
+data disabled
+
+Lit
+
+No IO-Link connection, process data
+disabled
+
+-
+
+Unlit
+
+No IO-Link connection, diagnostic
+information disabled
+
+Green
+
+Lit
+
+Input ON
+
+-
+
+Unlit
+
+Input OFF
+
+Green
+
+Lit
+
+Input or output ON
+
+Red
+
+Lit
+
+Output overcurrent
+
+-
+
+Unlit
+
+Input or output OFF
+
+IO-Link mode
+
+Pin 4
+0, 2, 4, 6 operation
+status
+
+Red
+
+Digital input mode
+
+Pin 2
+1, 3, 5, 7 operation
+status
+
+Blinking Device power supply overload
+
+-
+
+9, 11,
+13, 15
+
+--
+Input or output ON
+
+Lit
+
+Output overload/overcurrent
+
+Red
+
+Green
+
+Modbus/TCP watch dog time-out
+
+Auto negotiation in progress or standing
+Blinking by for IP address assignment via DHCP/
+BootP
+
+(Center
+LED)
+
+IO-Link
+communication
+status
+
+Power supply OFF
+
+Lit
+
+Connection established (100 Mbps)
+
+Blinking Sensor power supply overload
+Unlit
+
+Input or output OFF
+
+Blinking IO-Link connection enabled
+Lit
+
+Red
+-
+
+Unlit
+
+Blinking Sensor power supply overload
+
+Green
+
+-
+
+IP address duplication
+
+Description
+
+Blinking
+Unlit
+
+No IO-Link connection
+Process data disabled or diagnostic
+information provided
+Power supply OFF
+
+Blinking Communication occurring (100 Mbps)
+Lit
+
+Connection established (10 Mbps)
+
+Blinking Communication occurring (10 Mbps)
+Unlit
+
+No connection
+
+Voltage/current mode
+Green
+
+Red
+
+Lit
+
+Input enabled
+
+Lit
+
+V1 (pin 1) power supply overload / short
+circuit
+
+Blinking
+(Current) input wire disconnected
+(0.5 Hz)
+Blinking
+Out of measured value range
+(4 Hz)
+
+-
+
+Unlit
+
+Input disabled
+
+Resistance temperature detector mode
+Green
+0, 1, 2, 3
+
+Analog
+input status
+
+Red
+
+Lit
+
+Input enabled
+
+Lit
+--
+Wire the Ethernet Cable (Page 3-5)
+Wire to the IO Ports (Page 3-6)
+
+2. Device settings
+
+ Use the NQ Sensor Monitor to Configure Settings (Page 4-1)
+
+3. PLC and controller settings
+
+ For EtherNet/IP Communication (Page 6-1)
+ For Modbus/TCP Communication (Page 7-1)
+ For PROFINET Communication (Page 8-1)
+
+4. Start of communication
+
+1-10
+
+NQ Series User’s Manual
+
+2
+Specifications
+2
+Specifications
+
+This chapter describes the specifications and dimensions of the NQ Series.
+
+2-1
+
+General Specifications........................................................................................ Page 2-2
+
+2-2
+
+IO-Link Specifications......................................................................................... Page 2-6
+
+2-3
+
+Dimensions .......................................................................................................... Page 2-8
+
+2-4
+
+Internal Circuit Diagrams.................................................................................. Page 2-10
+
+NQ Series User’s Manual
+
+2-1
+
+2-1
+
+General Specifications
+
+NQ-MP8L/EP4L
+Model
+
+2
+
+Supported networks
+Network
+specifications
+
+Communication speed
+
+Specifications
+
+10Mbps/100Mbps
+
+10Mbps/100Mbps
+M8, 4 pins, female, A-code
+
+Connector type
+
+Power supply port IN: M12, 5 pins, male, L-code
+Power supply port OUT: M12, 5 pins, female, L-code
+
+Power supply port IN: M8, 4 pins, male, A-code
+Power supply port OUT: M8, 4 pins, female, A-code
+
+Power voltage
+
+18 to 30 VDC
+(IO-Link communication: 20.4 V to 28.8 V)
+
+18 to 30 VDC
+(IO-Link communication: 20.4 V to 28.8 V)
+
+Allowable current
+
+Up to 9 A for V1 and for V2
+Up to 11 A total for V1 and V2 combined
+
+Up to 4 A for V1 and for V2
+
+V1: Max. 180 mA
+V2: Max. 90 mA
+
+V1: Max. 110 mA
+V2: Max. 115 mA
+
+Connector type
+
+M12, 5 pins, female, A-code
+
+M12, 5 pins, female, A-code
+
+V1 power supply
+capacity
+
+Ports 1 and 5: Up to 4 A for each port, short-circuit
+protection
+Ports 2 to 4 and 6 to 8: Up to 2 A for each port, shortcircuit protection
+
+-
+--
+resistance
+
+Case material
+Weight
+
+*1
+
+2-2
+
+NQ-EP4L
+EtherNet/IP, Modbus/TCP
+
+M12, 4 pins, female, D-code
+
+Connector
+
+Power supply
+specifications
+
+NQ-MP8L
+EtherNet/IP, PROFINET, Modbus/TCP
+
+Maximum load current
+Short-circuit protection
+circuit
+
+Available
+
+Available
+
+Leakage current
+
+0.1 mA or less
+
+0.1 mA or less
+
+Residual voltage
+
+1 V or less
+
+1 V or less
+
+Operating ambient
+temperature
+
+−40°C to +70°C (No freezing)
+
+−40°C to +70°C (No freezing)
+
+Enclosure rating
+
+IP65 / IP67 / IP69K
+
+IP65 / IP67 / IP69K
+
+Vibration resistance
+
+5 to 150 Hz; 20 G; 10 sweeps each in the X, Y and Z
+directions
+
+5 to 150 Hz; 20 G; 10 sweeps each in the X, Y and Z
+directions
+
+Shock resistance
+
+15 G; 11 ms; X, Y, Z directions 3 times each axis
+
+15 G; 11 ms; X, Y, Z directions 3 times each axis
+
+Case: PA6-GF30
+IP address setting switches cover: PEI
+Connector: SUS303
+
+Case: PA6-GF30
+Connector: SUS303
+
+Approx. 530 g
+
+Approx. 190 g
+
+When using this product as Class B, power must be supplied to V1 and to V2.
+
+NQ Series User’s Manual
+
+2-1 General Specifications
+
+NQ-EP4A
+Model
+Network
+specifications
+
+EtherNet/IP, Modbus/TCP
+
+Communication speed
+
+10 Mbps / 100 Mbps
+
+Connector type
+
+M8, 4 pins, female, A-code
+
+Connector type
+
+Power supply port IN: M8, 4 pins, male, A-code
+Power supply port OUT: M8, 4 pins, female, A-code
+
+Power voltage
+Allowable current
+
+18 to 30 VDC
+Up to 4 A for V1 and for V2
+Up to 5.5 A total for V1 and V2 combined
+
+Current consumption
+Connector type
+Input
+specifications
+
+Max. 240 mA
+M12, 5 pins, female, A-code
+
+Number of inputs
+
+4
+
+Input classification
+
+Voltage / current / resistance temperature detector / thermocouple
+
+Resolution
+
+16 bit
+
+V1 power supply capacity
+
+Ports 1 to 4: Up to 1 A total, short-circuit protection
+Differential / single end
+0 to 10 V / ±10 V / 2 to 10 V / 0 to 5 V / 1 to 5 V / ±1 V / ±500 mV / ±100 mV / ±50 mV
+
+Input range
+
+Voltage input
+specifications
+
+Input filter
+
+4 levels
+
+Absolute maximum input
+
+11.85 V
+
+Input resistance
+
+100 kΩ or more
+
+Conversion speed
+Conversion
+precision
+
+Current input
+specifications
+
+4 ms or less
+
+(@25°C)
+
+0.1% of F.S. or less
+
+(@-40°C to +70°C)
+
+0.75% of F.S. or less
+
+Input range
+
+Differential / single end
+0 to 20 mA / 4 to 20 mA / ±20 mA
+
+Input filter
+
+4 levels
+
+Absolute maximum input
+
+23 mA
+
+Input resistance
+
+50 Ω or less
+
+Conversion speed
+Conversion
+--
+
+Device ID
+2001
+2004
+2008
+
+The validation function prevents the incorrect IO-Link devices from being connected by specifying, in advance, the
+vendor and device ID of the IO-Link device to connect to.
+
+< Configuring settings via field bus >
+Settings can also be configured via EtherNet/IP, Modbus/TCP, and PROFINET. In this situation, select the operation mode
+from the options shown below.
+Operation mode
+IO-Link without validation
+IO-Link with family compatible device
+IO-Link with compatible device
+IO-Link with identical device
+DI (with parameter access)
+DI
+*1
+*2
+
+Description
+Pin 4 operates in IO-Link communication mode. The connected device is not validated.
+Pin 4 operates in IO-Link communication mode. The connected device is validated with the
+[Vendor ID] and the highest-order byte of the [Device ID].*1
+Pin 4 operates in IO-Link communication mode. The connected device is validated with the
+[Vendor ID] and [Device ID].*1
+Pin 4 operates in IO-Link communication mode. The connected device is validated with the
+[Vendor ID], [Device ID], and [Serial Number]. If a mismatch occurs, the [Pre-Operate Status] is
+maintained.*1
+Pin 4 operates in digital input mode. Service data communication will be received.*2
+Pin 4 operates in digital input mode. Service data communication will not be received.
+
+If a validation mismatch occurs, process data I/O is not performed, but parameter reading/writing and diagnostic information will
+be enabled.
+The data storage function cannot be used. Also, this function cannot be used as digital input during IO-Link communication.
+
+For the detailed setting method, refer to the following pages.
+Network
+EtherNet/IP
+Modbus/TCP
+PROFINET
+
+Parameter settings using the
+configuration software
+Page 6-6
+Page 8-5
+
+Message
+communication
+Page 6-19
+Page 7-6
+-
+
+NQ Series User’s Manual
+
+4-13
+
+4
+Use the NQ Sensor Monitor to Configure Settings
+
+Serial validation
+
+Description
+
+4-6 Port Settings
+
+Data storage function
+The data storage function automatically records IO-Link device settings on the IO-Link master and transfers settings stored
+on the IO-Link master, such as when replacing devices, to the IO-Link device. The NQ-MP8L/EP4L has the following three
+operation modes.
+
+ Always sync mode
+Setting changes on IO-Link devices are always stored on the NQ.
+
+1
+
+12
+
+15 XX-X
+6 XXX
+34 7
+O
+
+M
+O
+D
+E
+D
+IS
+
+34
+
+15
+
+12
+
+D
+
+IS
+
+P
+
+M
+
+O
+
+D
+
+E
+
+2
+
+1
+
+67
+
+X
+
+X
+
+-X
+
+X
+
+X
+
+X
+
+D
+IS
+
+P
+
+M
+
+P
+
+Settings are
+transferred from the
+master to the sensor.
+--
+
+P
+
+1
+
+Settings are
+transferred from the
+master to the sensor.
+
+< Configuring settings via field bus >
+Settings can also be configured via EtherNet/IP, Modbus/TCP, and PROFINET. For the detailed setting method, refer to the
+following pages.
+Network
+EtherNet/IP
+Modbus/TCP
+PROFINET
+
+Parameter settings using the
+configuration software
+Page 6-6
+Page 8-5
+
+Message
+communication
+Page 6-19
+Page 7-6
+-
+
+NQ Series User’s Manual
+
+4-15
+
+Use the NQ Sensor Monitor to Configure Settings
+
+The master overwrites
+the sensor settings at
+all times.
+
+4
+
+12
+
+Setting change on the sensor
+
+4-6 Port Settings
+
+Process data setting
+IO-Link devices and the NQ Series communicate data in big endian format. When using a PLC that processes data in little
+endian format (such as KEYENCE PLCs), it is necessary to change the byte order.
+With the NQ Series, it is only possible to use the settings to change the byte order of the process data. (Service data is not
+supported.)
+
+4
+
+Data size
+
+Use the NQ Sensor Monitor to Configure Settings
+
+1 Byte
+
+2 Byte
+
+3 Byte
+
+4 Byte
+
+5 Byte
+
+6 Byte
+
+7 Byte
+
+8 Byte
+
+Process data setting
+
+Byte 8
+
+No conversion (direct)
+16-bit conversion (16 bit swap)
+32-bit conversion (32 bit swap)
+Convert all (swap all)
+No conversion (direct)
+16-bit conversion (16 bit swap)
+32-bit conversion (32 bit swap)
+Convert all (swap all)
+No conversion (direct)
+16-bit conversion (16 bit swap)
+32-bit conversion (32 bit swap)
+Convert all (swap all)
+No conversion (direct)
+16-bit conversion (16 bit swap)
+32-bit conversion (32 bit swap)
+Convert all (swap all)
+No conversion (direct)
+16-bit conversion (16 bit swap)
+32-bit conversion (32 bit swap)
+Convert all (swap all)
+No conversion (direct)
+16-bit conversion (16 bit swap)
+32-bit conversion (32 bit swap)
+Convert all (swap all)
+No conversion (direct)
+16-bit conversion (16 bit swap)
+32-bit conversion (32 bit swap)
+Convert all (swap all)
+No conversion (direct)
+16-bit conversion (16 bit swap)
+32-bit conversion (32 bit swap)
+Convert all (swap all)
+
+12
+34
+78
+F1
+--
+DE
+BC
+78
+12
+F1
+DE
+9A
+12
+
+< Configuring settings via field bus >
+Settings can also be configured via EtherNet/IP, Modbus/TCP, and PROFINET. For the detailed setting method, refer to the
+following pages.
+Network
+EtherNet/IP
+Modbus/TCP
+PROFINET
+
+4-16
+
+Parameter settings using the
+configuration software
+Page 6-6
+Page 8-5
+
+Message
+communication
+Page 6-19
+Page 7-6
+-
+
+NQ Series User’s Manual
+
+4-6 Port Settings
+
+Cycle time
+Set the cycle time of the process data.
+When [Automatic] is specified, the minimum cycle time of the connected IO-Link device is followed.
+When [Manual] is specified, you can set the cycle time to a value from 1.6 to 132.8 ms in intervals of 0.8 ms or 1.6 ms.
+< Configuring settings via field bus >
+Settings can also be configured via EtherNet/IP, Modbus/TCP, and PROFINET. The relationship between the value to write
+and the cycle time is shown below.
+
+Automatic
+
+10
+18
+20
+28
+30
+38
+40
+42
+44
+46
+48
+4A
+4C
+4E
+50
+52
+54
+
+1.6
+2.4
+3.2
+4
+4.8
+5.6
+6.4
+7.2
+8
+8.8
+9.6
+10.4
+11.2
+12
+12.8
+13.6
+14.4
+
+Time
+(ms)
+
+Setting
+value
+(HEX)
+56
+58
+5A
+5C
+5E
+60
+62
+64
+66
+68
+6A
+6C
+6E
+70
+72
+74
+76
+78
+7A
+
+Time
+(ms)
+15.2
+16
+16.8
+17.6
+18.4
+19.2
+20
+20.8
+21.6
+22.4
+23.2
+24
+24.8
+25.6
+26.4
+27.2
+28
+28.8
+29.6
+
+Setting
+value
+(HEX)
+7C
+7E
+80
+81
+82
+83
+84
+85
+86
+--
+124.8
+126.4
+128
+129.6
+131.2
+132.8
+
+For the detailed setting method, refer to the following pages.
+Network
+EtherNet/IP
+Modbus/TCP
+PROFINET
+
+Parameter settings using the
+configuration software
+Page 6-6
+Page 8-5
+
+Message
+communication
+Page 6-19
+Page 7-6
+-
+
+Diagnostic information notification level
+0: Transfer all IO-Link events.
+1: Transfer IO-Link events other than notification-level events.
+2: Transfer IO-Link events other than notification-level and warning-level events.
+3: Do not transfer IO-Link events.
+Reference
+
+• The contents and level of the event depend on the IO-Link device.
+• For details, see the instruction manual for the IO-Link device.
+
+Quick Start-Up
+Normally, IO-Link devices start within 0.5 seconds, as defined in the IO-Link specifications.
+If you enable the quick start-up function, the start-up time will be shortened to approximately 100 ms. Note, however, that
+not all IO-Link devices support this mode, so operations must be checked in advance.
+
+NQ Series User’s Manual
+
+4-17
+
+Use the NQ Sensor Monitor to Configure Settings
+
+Setting
+value
+(HEX)
+0
+
+4
+
+4-6 Port Settings
+
+Power supply setting
+With the NQ-MP8L, the supply of power from each port to its IO device can be controlled. It can also be controlled
+dynamically over a network.
+For the detailed method of controlling the power supply over a network, refer to the following pages.
+Item
+
+4
+
+Description
+
+Power supply setting (V1)
+
+Controls the V1 power for pin 1 and 3.<NQ-MP8L port 1 to 8 only>
+
+Power supply setting (V2)
+
+Controls the V2 power for pin 2 and 5.<NQ-MP8L port 5 to 8 only>
+
+Use the NQ Sensor Monitor to Configure Settings
+
+•: Initial value
+
+<Setting value>
+Setting range
+
+Description
+
+24V •
+
+Supplies 24V to the connected IO device.
+
+Process data control
+
+Controls the supply of power via the network.
+
+OFF
+
+Power is not supplied to the connected IO device.
+
+Network
+EtherNet/IP
+Modbus/TCP
+PROFINET
+
+Reference
+
+Parameter settings using the
+configuration software
+Page 6-11
+Page 8-5
+
+Message
+communication
+Page 6-19
+Page 7-6
+-
+
+When connecting a Class A device to a Class B port (ports 5 to 8) for NQ-MP8L,
+assigning the function for pin 2 of the connected sensor to PNP input may cause the sensor to malfunction.
+In such a situation, this problem can be avoided by setting "Power supply setting (V2)" to "OFF".
+
+4-18
+
+NQ Series User’s Manual
+
+4-6 Port Settings
+
+NQ-EP4A
+ Basic settings
+•: Initial value
+Item
+Operation mode
+
+Description
+Indicates the device to be connected to the port.
+
+Indicates the input range.
+
+Thermocouple cold
+junction compensation
+setting
+
+Indicates the method of cold junction compensation when a
+thermocouple is used.
+
+Disable port
+Input method
+
+Wiring type
+
+Temperature unit
+Present value
+
+Deactivates a port. When a port is disabled, the analog input
+status LED is unlit even when no device is connected to the port.
+Single end •
+< Voltage or current input only >
+Differential
+Indicates the type of wiring.
+Differential (No grounding)
+2-wire
+< Resistance temperature detector only >
+3-wire •
+Indicates the type of wiring.
+4-wire
+This item is displayed only when [Operation mode] is
+0: °C •
+[Thermocouple] or [Resistance thermometer]. Indicates the unit
+1: °F
+of temperature.
+Indicates the present value. The value is updated each time
+[Updt] is clicked.
+
+NQ Series User’s Manual
+
+4-19
+
+4
+Use the NQ Sensor Monitor to Configure Settings
+
+Input range
+
+Setting value
+Thermocouple •
+Voltage input
+Current input
+RTD
+Type K, −270 to 1370°C •
+Type B, 100 to 1820°C
+Type E, −270 to 1000°C
+Type J, −210 to 1200°C
+Type N, −270 to 1300°C
+Thermocouple
+Type R, −50 to 1768°C
+Type S, −50 to 1768°C
+Type T, −270 to 400°C
+Type C, 0 to 2315°C
+Type G, 0 to 2315°C
+-10 to 10 V
+0 to 10 V
+2 to 10 V
+0 to 5 V •
+--
+
+Name of the product
+
+6-28
+
+NQ Series User’s Manual
+
+367
+
+7
+Modbus/TCP
+Communication
+
+This chapter describes how to configure the NQ Series settings using NQ Monitor.
+
+7
+NQ Series Modbus/TCP Communication Function .......................................... Page 7-2
+
+7-2
+
+Communication Settings .................................................................................... Page 7-4
+
+7-3
+
+Register Mapping ................................................................................................ Page 7-6
+
+NQ Series User’s Manual
+
+7-1
+
+Modbus/TCP Communication
+
+7-1
+
+7-1
+
+NQ Series Modbus/TCP Communication Function
+
+Overview
+Modbus is a general purpose networking protocol used in FA (Factory Automation) and PA (Process Automation).
+Modbus only specifies the communication protocol, not the communication cable. Therefore, there are three types of
+cables: ModbusRTU and Modbus ASCII, which are based on serial communication such as RS-232C and RS-485, and
+Modbus/TCP, which communicates over Ethernet.
+In Modbus communication, there are generally four types of data areas: coil, input status, input register, and holding
+register. By issuing commands that specify function codes and sending these commands to slave units from the master
+unit, it is possible to read and write the data in these areas.
+The NQ Series operates as a slave unit (server device) in Modbus/TCP communication.
+
+7
+
+Note that unlike other network standards, Modbus is not subject to systematic application management. Therefore, it is
+
+Modbus/TCP Communication
+
+necessary to use actual machines to verify that devices that support Modbus can be connected to each other.
+
+
+
+Modbus/TCP
+
+NQ-MP8L/EP4L
+
+
+
+NQ-EP4A
+
+• Voltage
+• Current
+• Thermocouple
+• Resistance
+temperature
+detector
+
+
+
+
+
+IO-Link sensor
+Modbus is a trademark or registered trademark of Schneider Automation Inc.
+
+7-2
+
+NQ Series User’s Manual
+
+7-1 NQ Series Modbus/TCP Communication Function
+
+Modbus/TCP Communication
+Specifications
+ Modbus/TCP communication
+specifications
+Item
+Communication
+speed
+Transmission
+media
+Ethernet
+
+Modbus/TCP
+
+100 m (between nodes)
+Static IP, BOOTP, DHCP
+
+7
+
+502 (fixed)
+Refer to the Modbus/TCP-supported
+function codes shown below.
+
+Modbus/TCP Communication
+
+Maximum cable
+length
+IP address
+setting
+Port number
+Supported
+function codes
+
+NQ-MP8L
+NQ-EP4L
+NQ-EP4A
+10 Mbps (10BASE-T)
+100 Mbps (100BASE-TX)
+STP cable or Category 3 or higher UTP
+cable (10BASE-T)
+STP cable or Category 5 or higher UTP
+cable (100BASE-TX)
+
+TCP
+connection
+8
+count
+Input register
+0 (0x0000)
+start address
+Holding register
+2048 (0x800)
+start address
+
+ Supported functions
+Code (HEX)
+03 HEX
+04 HEX
+06 HEX
+10 HEX
+17 HEX
+
+Description
+Reading multiple holding registers
+Reading multiple input registers
+Writing one holding register
+Writing multiple holding registers
+Reading and writing multiple holding registers
+
+NQ Series User’s Manual
+
+7-3
+
+7-2
+
+Communication Settings
+
+NQ Series Settings
+
+Command Formats
+
+Configure the following settings. For details, refer to
+chapter 4.
+
+Examples of the command formats are shown here.
+
+1 IP address setting
+
+ Reading multiple holding registers (03H)
+< Request message >
+
+Set the NQ Series IP address.
+Size
+(bytes)
+2
+2
+
+Value
+(HEX)
+0000H
+0000H
+
+Number of bytes
+
+2
+
+0006H
+
+Unit ID
+
+1
+
+01H
+
+Function code
+
+1
+
+03H
+
+Start address
+
+2
+
+--
+
+2 Port setting
+Set the NQ Series port.
+"4-5 NQ Series Registration" (Page 4-8)
+"4-6 Port Settings" (Page 4-11)
+
+7
+
+3 Device process data setting
+
+Modbus/TCP Communication
+
+Set the process data of the IO-Link device to connect
+
+Description
+Normally 0
+Normally 0
+Size of the data to send after
+this point
+Normally 1
+Function code for reading
+multiple holding registers
+Address of the register at
+which to start reading (Page
+7-6)
+Number of registers to read
+continuously (n = 1 to 125D)
+
+to the NQ Series.
+< Response (normal) >
+
+"4-7 Device Settings" (Page 4-22)
+
+Item
+
+PLC and Controller Settings
+This section explains the flow of settings on the
+Modbus/TCP client side. For details, refer to the
+manual of each device.
+
+1 IP address setting
+Set the IP address of the Modbus/TCP client.
+
+The NQ Series operates as a server device for
+Modbus/TCP communication.
+
+Value
+(HEX)
+
+Transaction ID
+
+2
+
+0000H
+
+Protocol ID
+
+2
+
+0000H
+
+Number of bytes
+
+2
+
+(3 +
+2 × n)H
+
+Unit ID
+
+1
+
+01H
+
+Function code
+
+1
+
+03H
+
+Number of bytes of
+the data to read
+Data to read 1
+:
+Data to read n
+
+2 NQ Series communication settings
+
+Size
+(bytes)
+
+Description
+Same value as the request
+message
+Same value as the request
+message
+Size of the data to send after
+this point
+Same value as the request
+message
+Function code for reading
+multiple holding registers
+
+1
+
+(2 × n)H Size of the data to read
+
+2
+:
+2
+
+XXXXH
+:
+
+Read data
+:
+Read data
+
+< Response (error) >
+
+Use function codes to send commands from the
+client device (PLC or controller) to read and write
+information on the IO-Link device connected to the
+NQ Series.
+For details, refer to the instruction manual of the
+client device.
+For details on the NQ Series register settings, refer to
+"Modbus/TCP Communication Specifications" (Page
+7-3).
+
+7-4
+
+Size
+(bytes)
+
+Value
+(HEX)
+
+Transaction ID
+
+2
+
+0000H
+
+Protocol ID
+
+2
+
+0000H
+
+Number of bytes
+
+2
+
+0003H
+
+Unit ID
+
+1
+
+01H
+
+Function code
+
+1
+
+83H
+
+Error code
+
+1
+
+XXH
+
+Item
+
+NQ Series User’s Manual
+
+Description
+Same value as the request
+message
+0
+Size of the data to send after
+this point
+Same value as the request
+message
+The value with the highestorder bit of the value at the
+time of the request set to 1
+01H: Unsupported function
+code
+02H: Register address out of
+range
+03H: Number of registers out
+of range
+
+7-2 Communication Settings
+
+ Writing multiple holding registers (10H)
+< Request message >
+
+Transaction ID
+Protocol ID
+
+Size
+(bytes)
+2
+2
+
+Number of bytes
+
+2
+
+Unit ID
+
+1
+
+Function code
+
+1
+
+Start address
+
+2
+
+Number of registers
+
+2
+
+--
+writing (Page 7-6)
+Number of registers to write
+XXXXH
+continuously (n = 1 to 125D)
+
+Data to write
+:
+Data to write
+
+7
+Modbus/TCP Communication
+
+< Response (normal) >
+Size
+(bytes)
+
+Value
+(HEX)
+
+Transaction ID
+
+2
+
+0000H
+
+Protocol ID
+
+2
+
+0000H
+
+Number of bytes
+
+2
+
+0006H
+
+Unit ID
+
+1
+
+01H
+
+Function code
+
+1
+
+10H
+
+Start address
+
+2
+
+XXXXH
+
+Number of registers
+
+2
+
+XXXXH
+
+Item
+
+Description
+Same value as the request
+message
+Same value as the request
+message
+Size of the data to send after
+this point
+Same value as the request
+message
+Function code for writing
+multiple holding registers
+Same value as the request
+message
+Same value as the request
+message
+
+< Response (error) >
+Item
+Transaction ID
+
+Size
+(bytes)
+2
+
+Value
+(HEX)
+0000H
+
+Protocol ID
+
+2
+
+0000H
+
+Number of bytes
+
+2
+
+0003H
+
+Unit ID
+
+1
+
+01H
+
+Function code
+
+--
+15
+
+Port
+
+15
+
+7
+
+0
+
+Modbus/TCP Communication
+
+0001
+
+1
+
+400002
+
+0001
+
+1
+
+400002
+
+Process data status of the
+IO-Link device
+
+:
+R
+
+WORD
+
+15
+
+0002
+:
+0011
+0012
+:
+0021
+0022
+:
+0031
+0032
+:
+0041
+0042
+:
+0051
+0052
+:
+0061
+0062
+:
+0071
+0072
+:
+0081
+
+2
+:
+17
+18
+:
+33
+34
+:
+49
+50
+:
+65
+66
+:
+81
+82
+:
+97
+98
+:
+113
+114
+:
+129
+
+400003
+:
+400018
+400019
+:
+400034
+400035
+:
+400050
+400051
+:
+400066
+400067
+:
+400082
+400083
+:
+400098
+400099
+:
+400114
+400115
+:
+400130
+
+0002
+:
+--
+
+General error
+
+WORD
+
+WORD Same as Port 1 (C0)
+
+NQ Series User’s Manual
+
+7
+Modbus/TCP Communication
+
+0084
+
+3
+
+0: No error
+1: Error
+
+The device issued a
+parameter error. (Such
+as a loss of parameters
+or uninitialized status)
+The device issued
+temperature diagnostic
+information.
+The measured value is
+below the device’s
+measurement range or
+the set lower limit.
+The measured value
+exceeds the device’s
+measurement range or
+the set upper limit.
+The power voltage of the
+device is below the
+specified value.
+The power voltage of the
+device exceeds the
+specified value.
+The device has detected
+an overload.
+The device has an error.
+(Device status 4
+specified in the IO-Link
+specifications) For
+details about the error,
+check the event code.
+
+-
+
+7-7
+
+7-3 Register Mapping
+
+Address
+NQ-MP8L
+NQ-EP4L
+Relative
+Absolute
+Relative
+Absolute
+HEX
+DEC
+DEC
+HEX
+DEC
+DEC
+
+Item
+
+Attribute
+
+Data
+type
+
+bit
+
+Description
+
+0
+1
+
+Value
+
+0: Unknown
+1 to 3: Reserved
+4: Application
+5 to 7: Reserved
+0: Device
+1: Master
+0: Reserved
+1: Notification
+2: Warning
+3: Error
+0: Reserved
+1: Event single shot
+2: Event disappears
+3: Event appears
+
+Instance
+
+2
+3
+4
+5
+
+Source
+Event classification code
+(For details, refer to the
+IO-Link specifications.)
+--
+12
+13
+14
+15
+
+Diagnostic
+information
+(IO-Link event)
+
+7
+Modbus/TCP Communication
+
+008D
+
+141
+
+400142
+
+0048
+
+72
+
+400073
+
+:
+
+:
+
+:
+
+:
+
+:
+
+:
+
+00AA
+
+170
+
+400171
+
+0065
+
+101
+
+400102
+
+00AB
+
+171
+
+400172
+
+0066
+
+102
+
+400103
+
+00AC
+
+0800
+
+172
+
+2048
+
+400173
+
+402049
+
+0067
+
+0800
+
+103
+
+2048
+
+400104
+
+402049
+
+:
+16th
+event
+
+Module status
+
+Port outputs
+
+R
+
+UINT
+
+:
+
+:
+
+R
+R
+
+R
+
+R/W
+
+:
+Event classification code
+WORD
+Port number of the event
+--
+4401
+
+404402
+
+1131
+
+4401
+
+404402
+
+Modbus connection timeout time
+
+R/W
+
+UINT
+
+Indicates the Modbus connection time-out time. (Unit:
+Seconds)
+If no communication is made before the setting time
+elapses, the connection is disconnected automatically.
+0 to 65535
+When the setting time is [0], the connection time-out is not (Initial value: 0)
+monitored.
+When the Modbus connection time-out is active, the [BUS
+LED] blinks in green.
+
+NQ Series User’s Manual
+
+7-9
+
+Modbus/TCP Communication
+
+Address
+NQ-MP8L
+NQ-EP4L
+Item
+Relative
+Absolute
+Relative
+Absolute
+HEX
+DEC
+DEC
+HEX
+DEC
+DEC
+0801
+2049
+402050
+0801
+2049
+402050
+:
+:
+:
+:
+:
+:
+0810
+2064
+402065
+0810
+2064
+402065
+0811
+2065
+402066
+0811
+2065
+402066
+:
+:
+:
+:
+:
+:
+0820
+2080
+402081
+0820
+2080
+402081
+0821
+2081
+402082
+0821
+2081
+402082
+:
+:
+:
+:
+:
+:
+0830
+2096
+402097
+0830
+2096
+402097
+0831
+2097
+402098
+0831
+2097
+402098
+:
+:
+:
+:
+:
+:
+0840
+2112
+402113
+0840
+2112
+402113 Process output
+data of the IO0841
+2113
+402114
+Link device
+:
+:
+:
+0850
+2128
+402129
+0851
+2129
+402130
+--
+
+4412
+
+Item
+
+Attribute
+
+404413
+
+UINT
+Modbus parameter reset
+
+113D
+
+4413
+
+404414
+
+113D
+
+4413
+
+404414
+
+113E
+
+4414
+
+404415
+
+113E
+
+4414
+
+404415
+Modbus parameter save
+
+7
+
+Data
+type
+
+R/W
+
+bit
+
+Description
+
+Registers 1120H and 1130 to 113BH are reset to their
+initial values in the following procedure:
+(1) “6C6FH (“LO”)” is written in register 113CH.
+(2) At the same time as (1) or within 30 seconds of (1),
+“6164H (“AD”)” is written in 113DH.
+
+UINT
+
+If the Modbus connection settings are not saved (113EH
+and 113FH), the values in the EEPROM are not changed.
+
+UINT
+
+The values of registers 1120H and 1130 to 113BH are
+saved into the EEPROM using the following procedure:
+(1) “7361H (“SA”)” is written in register 113EH.
+(2) At the same time as (1) or within 30 seconds of (1),
+“7665H (“VE”)” is written in 113FH.
+
+R/W
+
+113F
+
+4415
+
+404416
+
+113F
+
+4415
+
+404416
+
+1150
+
+4432
+
+404433
+
+1150
+
+4432
+
+404433
+
+LED operation when V2
+voltage drops
+
+R/W
+
+WORD
+
+Indicates the behavior of the [PWR] LED when the V2
+voltage drops.
+
+2400
+
+9216
+
+409217
+
+2400
+
+9216
+
+409217
+
+V1 voltage
+
+R
+
+UINT
+
+Indicates the V1 voltage. (Unit: mV)
+
+2401
+
+9217
+
+409218
+
+2401
+
+9217
+
+409218
+
+V2 voltage
+
+R
+
+UINT
+
+Indicates the V2 voltage. (Unit: mV)
+
+Modbus/TCP Communication
+
+B000
+
+45056
+
+445057
+
+B000
+
+45056
+
+UINT
+
+Output
+reset after
+overcurrent
+detection
+(Pin 2)
+
+445057
+
+R/W
+
+7-10
+
+45057
+
+445058
+
+B001
+
+45057
+
+445058
+
+Reserved
+
+1
+
+Port 1 (C0)
+
+2
+
+Reserved
+
+3
+
+Port 2 (C1)
+
+4
+
+Reserved
+
+5
+
+Port 3 (C2)
+
+6
+
+Reserved
+
+7
+
+Port 4 (C3)
+
+8
+9
+10
+11
+12
+13
+14
+15
+0
+
+Digital I/O
+setting
+(Pin 2)
+
+R/W
+
+< When pin 2 is set to
+digital output >
+Indicates the recovery
+method after an
+overcurrent is detected.
+
+-
+
+-
+
+WORD
+
+Parameter
+
+B001
+
+0
+
+-
+--
+R/W
+
+DUINT Device ID
+Reserved
+
+NQ Series User’s Manual
+
+7-11
+
+7
+Modbus/TCP Communication
+
+Parameter
+
+WORD
+
+Value
+
+7-3 Register Mapping
+
+7
+Modbus/TCP Communication
+
+Address
+NQ-MP8L
+NQ-EP4L
+Item
+Relative
+Absolute
+Relative
+Absolute
+HEX
+DEC
+DEC
+HEX
+DEC
+DEC
+B00A
+45066
+445067
+B00A
+45066
+445067
+:
+:
+:
+:
+:
+:
+B011
+45073
+445074
+B011
+45073
+445074
+B012
+45074
+445075
+B012
+45074
+445075
+:
+:
+:
+:
+:
+:
+B019
+45081
+445082
+B019
+45081
+445082
+B01A
+45082
+445083
+B01A
+45082
+445083
+:
+:
+:
+:
+:
+:
+B021
+45089
+445090
+B021
+45089
+445090
+B022
+45090
+445091
+:
+:
+:
+Parameter
+B029
+45097
+445098
+B02A
+45098
+445099
+:
+:
+:
+B031
+45105
+445106
+B032
+45106
+445107
+:
+:
+:
+B039
+45113
+445114
+B03A
+45114
+445115
+--
+Controls the power
+process data (Page
+supplied to each device.
+4-18)
+2: Off
+
+Reserved
+
+7-13
+
+Modbus/TCP Communication
+
+V1 power supply control
+setting
+
+0: Supply 24 VDC •
+1: Switch based on
+Controls the power
+process data (Page
+supplied to each device.
+4-18)
+2: Off
+
+Reserved
+
+8
+
+10
+11
+12
+13
+14
+15
+
+Value
+
+7-3 Register Mapping
+
+Address
+NQ-MP8L
+NQ-EP4L
+Relative
+Absolute
+Relative
+Absolute
+HEX
+DEC
+DEC
+HEX
+DEC
+DEC
+
+Item
+
+Attribute
+
+Data
+type
+
+bit
+
+Description
+
+0
+Port 7 (Ch 13)
+1
+
+B049
+
+45129
+
+445130
+
+-
+
+-
+
+-
+
+V2 power supply control
+setting
+
+R/W
+
+WORD
+
+2
+3
+4
+5
+6
+7
+
+Port 8 (Ch 15)
+9
+
+7
+Modbus/TCP Communication
+
+7-14
+
+NQ Series User’s Manual
+
+0: Supply 24 VDC •
+1: Switch based on
+Controls the power
+process data (Page
+supplied to each device.
+4-18)
+2: Off
+
+Reserved
+
+8
+
+10
+11
+12
+13
+14
+15
+
+Value
+
+Reserved
+
+0: Supply 24 VDC •
+1: Switch based on
+Controls the power
+process data (Page
+supplied to each device.
+4-18)
+2: Off
+
+7-3 Register Mapping
+
+NQ-EP4A
+Address
+Relative
+Absolute
+HEX
+DEC
+DEC
+0000
+
+0
+
+400001
+
+0001
+
+1
+
+400002
+
+0002
+
+2
+
+400003
+
+0003
+
+3
+
+400004
+
+Item
+
+Analog input
+value
+
+Port 1
+(C0)
+Port 2
+(C1)
+Port 3
+(C2)
+Port 4
+(C3)
+
+Attribute
+
+Data
+type
+
+R
+
+-
+
+bit
+
+Description
+
+Analog input value
+
+400005
+
+--
+and resistance temperature
+detector modes.
+"Analog input data format"
+(Page 9-2)
+The measured value is below the
+specified lower limit.
+"Analog input data format"
+(Page 9-2)
+
+7
+Modbus/TCP Communication
+
+4
+
+-
+
+0
+
+Port 1
+(C0)
+
+0004
+
+Indicates an analog input value.
+The input data varies depending
+on the settings of [Operation
+mode] and [Input range].
+
+Value
+
+WORD
+
+-
+
+Scaling value
+
+NQ Series User’s Manual
+
+7-15
+
+7-3 Register Mapping
+
+Address
+Relative
+Absolute
+HEX
+DEC
+DEC
+
+000A
+
+000B
+
+10
+
+11
+
+400011
+
+400012
+
+Item
+
+Scaling function status
+
+Module status
+
+Attribute
+
+R
+
+R
+
+Data
+type
+
+bit
+
+-
+
+0
+1
+2
+3
+4
+:
+15
+
+Port 1 (C0)
+Port 2 (C1)
+Port 3 (C2)
+Port 4 (C3)
+-
+
+0
+
+Diagnostic information
+
+-
+
+1
+2
+3
+4
+5
+6
+7
+8
+
+-
+
+--
+14
+15
+
+-
+
+-
+
+WORD
+
+7
+Modbus/TCP Communication
+
+1000
+:
+100B
+
+100C
+
+4096
+:
+4107
+
+4108
+
+404097
+:
+404108
+
+404109
+
+Module identification
+information
+
+Module status
+
+R
+
+R
+
+Description
+
+Turns ON when the scaling
+function is valid.
+
+STRING Model (STRING)
+
+WORD
+
+1017
+
+4119
+
+404120
+
+Reserved
+
+R
+
+1020
+
+4128
+
+404129
+
+Watch dog actual time
+
+R
+
+UINT
+
+1120
+
+4384
+
+404385
+
+Watch dog setting time
+
+R/W
+
+UINT
+
+1130
+
+4400
+
+404401
+
+Reserved
+
+Value
+
+0: Diagnostic information
+not provided
+1: Diagnostic information
+provided
+
+0: 18 VDC or higher
+1: Lower than 18 VDC
+
+NQ-EP4A
+0: Diagnostic information
+not provided
+1: Diagnostic information
+provided
+
+0
+
+Diagnostic information
+
+1
+--
+4401
+
+404402
+
+113C
+
+4412
+
+404413
+
+Modbus connection timeout time
+
+113E
+
+4413
+
+4414
+
+7-16
+
+4415
+
+R/W
+
+404414
+
+404415
+404416
+
+Indicates the Modbus connection time-out time. (Unit: Seconds)
+If no communication is made before the setting time elapses, the connection
+is disconnected automatically. When the setting time is [0], the connection
+0 to 65535
+time-out is not monitored.
+(Initial value: 0)
+When the Modbus connection time-out is active, the [BUS LED] blinks in
+green.
+Registers 1120H and 1130 to 113BH are reset to their initial values in the
+following procedure:
+(1) “6C6FH (“LO”)” is written in register 113CH.
+(2) At the same time as (1) or within 30 seconds of (1), “6164H (“AD”)” is
+See the left column.
+written in 113DH.
+
+UINT
+
+UINT
+Modbus parameter save
+
+113F
+
+UINT
+
+UINT
+Modbus parameter reset
+
+113D
+
+R/W
+
+< Output >
+When the setting time is [= 0 (ms)]: The watch dog timer is deactivated. The
+output is retained.
+When the setting time is [> 0 (ms)]: If no communication is made before the
+setting time elapses, the output is set to 0.
+(Initial value: 500)
+< LED display >
+[BUS LED]: Lit in red
+
+R/W
+UINT
+
+If the Modbus connection settings are not saved (113EH and 113FH), the
+values in the EEPROM are not changed.
+The values of registers 1120H and 1130 to 113BH are saved into the EEPROM using
+the following procedure:
+(1) “7361H (“SA”)” is written in register 113EH.
+(2) At the same time as (1) or within 30 seconds of (1), “7665H (“VE”)” is
+written in 113FH.
+
+NQ Series User’s Manual
+
+See the left column.
+
+7-3 Register Mapping
+
+Address
+Relative
+Absolute
+Item
+HEX
+DEC
+DEC
+1140
+4416
+404417 Reserved
+1141
+4417
+404418 Reserved
+
+Attribute
+
+Data
+type
+
+bit
+
+Description
+
+2400
+
+9216
+
+409217
+
+V1 voltage
+
+R
+
+UINT
+
+Indicates the V1 voltage. (Unit: mV)
+
+2401
+
+9217
+
+409218
+
+V2 voltage
+
+R
+
+UINT
+
+Indicates the V2 voltage. (Unit: mV)
+
+8000
+:
+8FFF
+9000
+:
+9FFF
+A000
+:
+AFFF
+
+32768
+:
+36863
+36864
+:
+40959
+40960
+:
+45055
+
+432769
+:
+436864
+436865
+:
+440960
+440961
+:
+445056
+
+Reserved
+
+Reserved
+
+3
+4
+--
+
+RTD connection type
+
+NQ Series User’s Manual
+
+-
+
+7-17
+
+7
+Modbus/TCP Communication
+
+2
+
+45056
+
+0: Lower than 18 V
+18000 or higher: Voltage
+value
+0: Lower than 18 V
+18000 or higher: Voltage
+value
+
+Reserved
+
+0
+
+B000
+
+Value
+
+7-3 Register Mapping
+
+Address
+Relative
+Absolute
+HEX
+DEC
+DEC
+
+Item
+
+Attribute
+
+Data
+type
+
+bit
+0
+1
+2
+3
+4
+5
+6
+
+Description
+
+RTD type
+
+Indicates the type of RTD.
+
+Thermocouple cold junction
+compensation setting
+
+Indicates the method of cold
+junction compensation when a
+thermocouple is used.
+
+7
+
+B002
+
+45058
+
+Port 1
+
+445059
+
+R/W
+
+WORD
+
+8
+9
+10
+11
+
+Parameter
+
+12
+13
+
+7
+
+Thermocouple type
+14
+
+Indicates the type of
+thermocouple.
+
+Modbus/TCP Communication
+
+15
+B003
+B004
+B005
+B006
+B007
+B008
+B009
+B00A
+B00B
+
+45059
+45060
+45061
+45062
+45063
+45064
+45065
+45066
+45067
+
+445060
+445061
+445062
+445063
+445064
+445065
+445066
+445067
+445068
+
+B00C
+
+45068
+
+445069
+
+B00D
+B00E
+B00F
+B010
+B011
+B012
+B013
+B014
+B015
+B016
+
+45069
+45070
+45071
+45072
+45073
+45074
+45075
+45076
+45077
+45078
+
+445070
+445071
+445072
+445073
+445074
+445075
+445076
+445077
+445078
+445079
+
+B017
+B018
+B019
+B01A
+B01B
+
+45079
+45080
+45081
+45082
+45083
+
+445080
+445081
+445082
+445083
+445084
+
+B01C
+B01D
+B01E
+B01F
+
+45084
+45085
+45086
+45087
+
+445085
+--
+If the NQ Series unit encounters an error the cause will be shown on the indicator lights on the unit. See the tables below
+for countermeasures.
+For details on the LED displays for each model, refer to the following pages.
+"NQ-MP8L" (Page 1-8)
+"NQ-EP4L" (Page 1-8)
+"NQ-EP4A" (Page 1-9)
+"NQ-IL8P" (Page 1-9)
+
+ It is not possible to communicate with a higher-level device (EtherNet/IP, PROFINET,
+NQ-MP8L/EP4L/EP4A
+Modbus/TCP).
+If communication with a higher-level device is not successful, check the LED display shown below, and then implement
+countermeasures.
+Notation
+PWR
+
+Description
+Power supply
+
+LED status
+Green
+Lit
+Red
+Lit
+Unlit
+Lit
+
+Status
+Normal V1/V2 voltage
+V2 voltage of less than 18 V*
+V1 voltage of less than 18 V
+Connection with higher-level side
+enabled
+
+Green
+Blinking Connection standby status
+
+9
+Appendix
+
+BUS
+
+Status of
+communication
+with the higherlevel unit
+
+ETH1
+ETH2
+
+Countermeasure
+• Check whether the power supply cable is connected correctly.
+• Check the power voltage and the power supply capacity.
+Communication with the higher-level device has not been
+established. Check whether the connection has been set
+correctly.
+Check whether there are duplicate IP addresses.
+Check the watch dog time-out time.
+
+IP address duplication
+Modbus/TCP watch dog time-out
+Red
+IP address setting switches set to
+Revise the IP address setting.
+“0.0.0.0”
+Blinking Blink command being executed
+Auto negotiation in progress or
+Red/
+Blinking standing by for IP address assignment green
+via DHCP/BootP
+• Check whether the power supply cable is connected correctly.
+Unlit
+Power supply OFF
+• Check the power voltage and the power supply capacity.
+Lit
+Connection established (100 Mbps)
+Green
+Blinking Traffic present (100 Mbps)
+Lit
+Connection established (10 Mbps)
+Orange
+Blinking Traffic present (10 Mbps)
+Check whether the Ethernet cable is connected correctly.
+Unlit
+No connection
+Lit
+
+* The LED blinks in green on the NQ-MP8L.
+
+ Communication with the sensor is not possible.
+
+NQ-MP8L/EP4L
+If communication with a sensor is not successful, check the LED display shown below, and then implement
+countermeasures.
+
+ IO-Link mode
+Notation
+
+Description
+
+PWR
+
+Power supply
+
+ERR
+
+Error status
+
+MP8L: 0,
+2, 4, 6, 8,
+Pin 4 operation
+10, 12, 14
+status
+EP4L: 0,
+2, 4, 6
+
+LED status
+Green
+Lit
+Red
+Lit
+Unlit
+Green
+Lit
+
+Status
+Normal V1/V2 voltage
+V2 voltage of less than 18 V*
+V1 voltage of less than 18 V
+Diagnostic information not provided
+
+Red
+
+Lit
+
+Diagnostic information provided
+
+-
+
+Unlit
+
+Power supply OFF
+
+Green
+
+Blinking
+Blinking
+
+Red
+Lit
+-
+
+Unlit
+
+IO-Link connection enabled, process
+data enabled
+IO-Link connection enabled, process
+data disabled
+No IO-Link connection, process data
+disabled
+No IO-Link connection
