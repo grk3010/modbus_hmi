@@ -1,0 +1,232 @@
+from nicegui import ui
+import os
+from shared_state import settings, save_settings, modbus_client, sensor_parser, IODD_DIR
+from components import SimulationToggle
+
+@ui.page('/config')
+def config_page():
+    with ui.header().classes('bg-dark text-white items-center q-pa-md shadow-2'):
+        ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/')).props('flat')
+        ui.label('Configuration').classes('text-h5 font-bold')
+        ui.space()
+        ui.button('Save', icon='save', on_click=save_settings).props('color="primary"')
+
+    available_sensors = [""] + sensor_parser.get_available_sensors()
+
+    with ui.row().classes('w-full q-pa-md justify-center'):
+        with ui.column().classes('w-1/2 dashboard-card'):
+            with ui.row().classes('w-full justify-between items-center'):
+                ui.label("Master Configuration").classes('text-h6')
+                
+                # Note: Auto-discover via Modbus ISDU is unsupported by Keyence documentation.
+                # Sensors must be manually configured below.
+            
+            with ui.expansion('Data Logging Settings', icon='save').classes('w-full bg-dark rounded q-my-sm'):
+                ui.checkbox("Enable Local Logging").bind_value(settings, "enable_logging").on('update:model-value', save_settings)
+                ui.number("Logging Interval (s)", value=10.0, format="%.1f").bind_value(settings, "logging_interval").on('update:model-value', save_settings)
+
+            with ui.expansion('OPC-UA Compressor Settings', icon='settings_input_component').classes('w-full bg-dark rounded q-my-sm'):
+                ui.input(label="OPC-UA Server IP").classes('w-full').bind_value(settings, "opcua_ip").on('update:model-value', save_settings)
+                ui.input(label="Pressure Node ID").classes('w-full').bind_value(settings, "opcua_node_pressure").on('update:model-value', save_settings)
+                ui.input(label="Temp Node ID").classes('w-full').bind_value(settings, "opcua_node_temp").on('update:model-value', save_settings)
+                ui.input(label="Hours Node ID").classes('w-full').bind_value(settings, "opcua_node_hours").on('update:model-value', save_settings)
+                ui.input(label="State Node ID").classes('w-full').bind_value(settings, "opcua_node_state").on('update:model-value', save_settings)
+                ui.input(label="Start Node ID").classes('w-full').bind_value(settings, "opcua_node_start").on('update:model-value', save_settings)
+                ui.input(label="Stop Node ID").classes('w-full').bind_value(settings, "opcua_node_stop").on('update:model-value', save_settings)
+
+            @ui.refreshable
+            def port_mapping_ui():
+                master_type = settings.get("master_type", "NQ-MP8L (8 Ports)")
+                num_ports = 8 if "8" in master_type else 4
+                
+                for i in range(1, num_ports + 1):
+                    with ui.row().classes('w-full items-center justify-between q-my-sm gap-2'):
+                        with ui.column().classes('gap-0 shrink-0 w-24'):
+                            ui.label(f"Port {i}").classes('text-bold')
+                            
+                        with ui.column().classes('gap-0 w-20 shrink-0'):
+                            addr_input = ui.number(label="Address", value=settings.get(f"{i}_modbus_address", (i-1)*50), format="%d", on_change=save_settings)
+                            addr_input.bind_value(settings, f"{i}_modbus_address")
+                            len_input = ui.number(label="Length", value=settings.get(f"{i}_modbus_length", 50), format="%d", on_change=save_settings)
+                            len_input.bind_value(settings, f"{i}_modbus_length")
+                        
+                        name_input = ui.input(placeholder="Sensor Name").classes('w-32 shrink-0')
+                        name_input.bind_value(settings, f"{i}_name")
+
+                        def get_icon_src(pid):
+                            ic = sensor_parser.get_sensor_icon(pid)
+                            if ic:
+                                return f"/iodd_assets/{os.path.relpath(ic, os.path.abspath(IODD_DIR))}"
+                            return ""
+
+                        with ui.column().classes('items-end'):
+                            img = ui.image().classes('w-12 h-12 object-contain bg-white rounded shadow-sm')
+                            img.bind_source_from(settings, str(i), backward=get_icon_src)
+                            img.bind_visibility_from(settings, str(i), backward=lambda pid: bool(get_icon_src(pid)))
+                            
+                            select = ui.select(available_sensors, value=settings.get(str(i), ""), label="Sensor Type").classes('w-48')
+                            select.bind_value(settings, str(i))
+                            select.on('update:model-value', save_settings)
+
+            with ui.row().classes('w-full items-center justify-between'):
+                ip_label = ui.label()
+                ip_label.bind_text_from(settings, 'master_ip', backward=lambda ip: f"Current Master IP: {ip if ip else '127.0.0.1'}")
+                
+                def get_network_interfaces():
+                    import subprocess
+                    interfaces = []
+                    try:
+                        output = subprocess.check_output("ip -o addr show", shell=True).decode()
+                        for line in output.split("\n"):
+                            if not line: continue
+                            parts = line.split()
+                            if len(parts) >= 4 and parts[2] == "inet":
+                                interfaces.append({"iface": parts[1], "ip": parts[3]})
+                    except Exception:
+                        pass
+                    if not interfaces:
+                        interfaces.append({"iface": "localhost", "ip": "127.0.0.1/8"})
+                    return interfaces
+
+                def prompt_scan_network():
+                    interfaces = get_network_interfaces()
+                    options = {iface['ip']: f"{iface['iface']} ({iface['ip']})" for iface in interfaces}
+                    
+                    with ui.dialog() as dialog, ui.card().classes('w-96'):
+                        ui.label("Select Network Interface to Scan").classes('text-h6 font-bold q-mb-md')
+                        selected_iface = ui.select(options, value=list(options.keys())[0], label="Interface").classes('w-full q-mb-md')
+                        
+                        async def perform_scan():
+                            dialog.close()
+                            subnet = selected_iface.value
+                            ui.notify(f"Scanning {subnet} for IO-Link Masters...", type="info")
+                            
+                            import ipaddress
+                            try:
+                                net = ipaddress.IPv4Network(subnet, strict=False)
+                                broadcast_ip = str(net.broadcast_address)
+                            except Exception:
+                                broadcast_ip = "255.255.255.255"
+                                
+                            devices = await modbus_client.scan_cip_network(broadcast_ip=broadcast_ip)
+                            if devices:
+                                dev = devices[0]
+                                settings["master_ip"] = dev["ip"]
+                                
+                                num_ports = 8
+                                if "NQ-EP4" in dev["product_name"]:
+                                    settings["master_type"] = "NQ-EP4L (4 Ports)"
+                                    num_ports = 4
+                                elif "NQ-MP8" in dev["product_name"]:
+                                    settings["master_type"] = "NQ-MP8L (8 Ports)"
+                                    num_ports = 8
+                                else:
+                                    settings["master_type"] = "NQ-MP8L (8 Ports)"
+                                    
+                                ui.notify(f"Found {dev['product_name']} at {dev['ip']}. Querying ports...", type="info")
+                                
+                                # Query the master for connected sensors
+                                discovered_sensors = await modbus_client.discover_connected_sensors(dev["ip"], num_ports=num_ports)
+                                
+                                sensors_mapped = 0
+                                available = sensor_parser.get_available_sensors()
+                                for port, info in discovered_sensors.items():
+                                    prod_id_str = info.get("product_id_str")
+                                    vid = info.get("vendor_id")
+                                    did = info.get("device_id")
+                                    
+                                    mapped_id = None
+                                    if prod_id_str and prod_id_str in available:
+                                        mapped_id = prod_id_str
+                                    else:
+                                        mapped_id = sensor_parser.get_product_by_id(vid, did)
+                                        
+                                    if mapped_id:
+                                        settings[str(port)] = mapped_id
+                                        sensors_mapped += 1
+                                
+                                ui.notify(f"Discovery complete. Auto-mapped {sensors_mapped} sensors.", type="positive")
+                                save_settings()
+                                port_mapping_ui.refresh()
+                            else:
+                                ui.notify("No masters found via auto-discovery.", type="warning")
+                        
+                        with ui.row().classes('w-full justify-end q-mt-md gap-4'):
+                            ui.button("Cancel", on_click=dialog.close).props('flat')
+                            ui.button("Scan", on_click=perform_scan).props('color="primary"')
+                            
+                    dialog.open()
+
+                def prompt_manual_ip():
+                    with ui.dialog() as dialog, ui.card():
+                        ui.label("Enter Master IP Address")
+                        ip_input = ui.input(value=settings.get("master_ip", "192.168.1.100"))
+                        
+                        def set_ip():
+                            settings["master_ip"] = ip_input.value
+                            ui.notify(f"IP Set to {ip_input.value}")
+                            dialog.close()
+                            port_mapping_ui.refresh()
+                        
+                        ui.button("Save", on_click=set_ip)
+                    dialog.open()
+
+                with ui.row():
+                    ui.button(icon='search', on_click=prompt_scan_network).props('flat round')
+                    ui.button(icon='edit', on_click=prompt_manual_ip).props('flat round')
+
+            master_options = ["NQ-MP8L (8 Ports)", "NQ-EP4L (4 Ports)"]
+            
+            def get_master_icon(mtype):
+                if not mtype:
+                    return ""
+                if "NQ-EP4L" in mtype:
+                    return "/iodd_assets/extracted_NQ-EP4L_EDS_208/NQ-EP4L_EDS_208/Keyence_NQEP4L.ico"
+                if "NQ-MP8L" in mtype:
+                    return "/iodd_assets/extracted_NQ-MP8L_EDS_208/NQ-MP8L_EDS_208/Keyence_NQMP8L.ico"
+                return ""
+
+            with ui.row().classes('items-center gap-4'):
+                master_img = ui.image().classes('w-12 h-12 object-contain bg-white rounded shadow-sm')
+                master_img.bind_source_from(settings, "master_type", backward=get_master_icon)
+                
+                master_select = ui.select(master_options, value=settings.get("master_type", "NQ-MP8L (8 Ports)"), label="Master Type", on_change=port_mapping_ui.refresh)
+                master_select.bind_value(settings, "master_type")
+                
+            with ui.row().classes('items-center gap-4 q-mt-sm'):
+                temp_u = ui.select(['°C', '°F'], value=settings.get("global_temp_unit", "°C"), label="Global Temp Unit", on_change=port_mapping_ui.refresh).classes('w-32')
+                temp_u.bind_value(settings, "global_temp_unit")
+                
+                pres_u = ui.select(['kPa', 'MPa', 'psi', 'bar'], value=settings.get("global_pres_unit", "kPa"), label="Global Pres Unit", on_change=port_mapping_ui.refresh).classes('w-32')
+                pres_u.bind_value(settings, "global_pres_unit")
+                
+                flow_u = ui.select(['L/min', 'CFM'], value=settings.get("global_flow_unit", "L/min"), label="Global Flow Unit", on_change=port_mapping_ui.refresh).classes('w-32')
+                flow_u.bind_value(settings, "global_flow_unit")
+            
+            ui.separator().classes('q-my-md')
+            port_mapping_ui()
+            
+        with ui.column().classes('w-1/3 q-ml-md dashboard-card items-center'):
+            ui.label("System Tools").classes('text-h6')
+            
+            ui.label("Simulation Mode").classes('text-subtitle1 q-mt-sm font-bold text-grey')
+            SimulationToggle(initial_state=settings.get("use_simulation", False))
+            ui.separator().classes('w-full q-my-md')
+            
+            async def handle_upload(e):
+                # Basic upload handler
+                os.makedirs(IODD_DIR, exist_ok=True)
+                file_path = os.path.join(IODD_DIR, e.name)
+                with open(file_path, 'wb') as f:
+                    f.write(e.content.read())
+                ui.notify(f"Uploaded {e.name}")
+                sensor_parser._extract_all()
+                sensor_parser._parse_all()
+                # Reload page to refresh select options
+                ui.navigate.to('/config')
+
+            ui.upload(on_upload=handle_upload, label="Upload IODD Zip").classes('w-full max-w-sm')
+            ui.separator().classes('w-full q-my-md')
+            ui.label("Remote Access").classes('text-subtitle1')
+            # Mock QR code for now
+            ui.html('<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://local_ip:8080" />')
