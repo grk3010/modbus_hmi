@@ -45,7 +45,7 @@ def main():
     @ui.refreshable
     def render_qr():
         current_ip = remote_ip.value
-        ui.html(f'<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://{current_ip}:8080" />')
+        ui.html(f'<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://{current_ip}:8080" />', sanitize=False)
         ui.label(f"http://{current_ip}:8080").classes('text-subtitle1 text-grey font-mono q-mt-sm')
 
     remote_ip.on('update:model-value', render_qr.refresh)
