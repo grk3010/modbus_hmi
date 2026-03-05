@@ -118,6 +118,20 @@ async def data_logging_loop():
 
 # Run the Modbus polling in the background when the app starts
 app.on_startup(lambda: asyncio.create_task(data_logging_loop()))
+
+async def data_pruning_loop():
+    while True:
+        try:
+            retention_days = float(settings.get("data_retention_days", 7.0))
+            if retention_days > 0:
+                await data_logger.prune_old_data_async(retention_days)
+        except Exception as e:
+            print(f"Pruning loop error: {e}")
+        # Run pruning check every hour (3600 seconds)
+        await asyncio.sleep(3600)
+
+app.on_startup(lambda: asyncio.create_task(data_pruning_loop()))
+
 app.on_startup(lambda: asyncio.create_task(modbus_client.poll_ports(settings, sensor_parser)))
 if opcua_client:
     app.on_startup(lambda: asyncio.create_task(opcua_client.connect_and_poll()))

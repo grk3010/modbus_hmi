@@ -6,7 +6,7 @@ from shared_state import settings, data_logger, sensor_parser, IODD_DIR, get_eff
 def charts_page():
     with ui.header().classes('bg-dark text-white items-center q-pa-md shadow-2'):
         ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/')).props('flat')
-        ui.label('Historical Data Charts').classes('text-h5 font-bold')
+        ui.label('Historical Data').classes('text-h5 font-bold')
         ui.space()
         
     with ui.column().classes('w-full q-pa-md items-center'):

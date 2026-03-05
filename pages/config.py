@@ -1,6 +1,6 @@
 from nicegui import ui
 import os
-from shared_state import settings, save_settings, modbus_client, sensor_parser, IODD_DIR
+from shared_state import settings, save_settings, modbus_client, sensor_parser, IODD_DIR, data_logger
 from components import SimulationToggle
 
 @ui.page('/config')
@@ -13,60 +13,62 @@ def config_page():
 
     available_sensors = [""] + sensor_parser.get_available_sensors()
 
-    with ui.row().classes('w-full q-pa-md justify-center'):
-        with ui.column().classes('w-1/2 dashboard-card'):
+    with ui.row().classes('w-full q-pa-md justify-center flex-col md:flex-row md:items-start gap-4 flex-nowrap'):
+        with ui.column().classes('w-full md:w-1/2 dashboard-card text-center md:text-left'):
             with ui.row().classes('w-full justify-between items-center'):
-                ui.label("Master Configuration").classes('text-h6')
-                
-                # Note: Auto-discover via Modbus ISDU is unsupported by Keyence documentation.
-                # Sensors must be manually configured below.
+                ui.label("IO Link Master Configuration").classes('text-h6')
             
-            with ui.expansion('Data Logging Settings', icon='save').classes('w-full bg-dark rounded q-my-sm'):
-                ui.checkbox("Enable Local Logging").bind_value(settings, "enable_logging").on('update:model-value', save_settings)
-                ui.number("Logging Interval (s)", value=10.0, format="%.1f").bind_value(settings, "logging_interval").on('update:model-value', save_settings)
-
-            with ui.expansion('OPC-UA Compressor Settings', icon='settings_input_component').classes('w-full bg-dark rounded q-my-sm'):
-                ui.input(label="OPC-UA Server IP").classes('w-full').bind_value(settings, "opcua_ip").on('update:model-value', save_settings)
-                ui.input(label="Pressure Node ID").classes('w-full').bind_value(settings, "opcua_node_pressure").on('update:model-value', save_settings)
-                ui.input(label="Temp Node ID").classes('w-full').bind_value(settings, "opcua_node_temp").on('update:model-value', save_settings)
-                ui.input(label="Hours Node ID").classes('w-full').bind_value(settings, "opcua_node_hours").on('update:model-value', save_settings)
-                ui.input(label="State Node ID").classes('w-full').bind_value(settings, "opcua_node_state").on('update:model-value', save_settings)
-                ui.input(label="Start Node ID").classes('w-full').bind_value(settings, "opcua_node_start").on('update:model-value', save_settings)
-                ui.input(label="Stop Node ID").classes('w-full').bind_value(settings, "opcua_node_stop").on('update:model-value', save_settings)
-
             @ui.refreshable
             def port_mapping_ui():
                 master_type = settings.get("master_type", "NQ-MP8L (8 Ports)")
                 num_ports = 8 if "8" in master_type else 4
                 
                 for i in range(1, num_ports + 1):
-                    with ui.row().classes('w-full items-center justify-between q-my-sm gap-2'):
-                        with ui.column().classes('gap-0 shrink-0 w-24'):
-                            ui.label(f"Port {i}").classes('text-bold')
-                            
-                        with ui.column().classes('gap-0 w-20 shrink-0'):
-                            addr_input = ui.number(label="Address", value=settings.get(f"{i}_modbus_address", (i-1)*50), format="%d", on_change=save_settings)
-                            addr_input.bind_value(settings, f"{i}_modbus_address")
-                            len_input = ui.number(label="Length", value=settings.get(f"{i}_modbus_length", 50), format="%d", on_change=save_settings)
-                            len_input.bind_value(settings, f"{i}_modbus_length")
-                        
-                        name_input = ui.input(placeholder="Sensor Name").classes('w-32 shrink-0')
-                        name_input.bind_value(settings, f"{i}_name")
+                    def get_icon_src(pid):
+                        ic = sensor_parser.get_sensor_icon(pid)
+                        if ic:
+                            return f"/iodd_assets/{os.path.relpath(ic, os.path.abspath(IODD_DIR))}"
+                        return ""
 
-                        def get_icon_src(pid):
-                            ic = sensor_parser.get_sensor_icon(pid)
-                            if ic:
-                                return f"/iodd_assets/{os.path.relpath(ic, os.path.abspath(IODD_DIR))}"
-                            return ""
+                    # We pass the loop variable through default arg to capture it
+                    def on_setting_change(e, port_num=i):
+                        save_settings()
+                        port_mapping_ui.refresh()
 
-                        with ui.column().classes('items-end'):
-                            img = ui.image().classes('w-12 h-12 object-contain bg-white rounded shadow-sm')
-                            img.bind_source_from(settings, str(i), backward=get_icon_src)
-                            img.bind_visibility_from(settings, str(i), backward=lambda pid: bool(get_icon_src(pid)))
-                            
-                            select = ui.select(available_sensors, value=settings.get(str(i), ""), label="Sensor Type").classes('w-48')
-                            select.bind_value(settings, str(i))
-                            select.on('update:model-value', save_settings)
+                    with ui.expansion().classes('w-full bg-dark rounded q-my-sm shadow-2') as exp:
+                        with exp.add_slot('header'):
+                            with ui.row().classes('w-full items-center justify-between no-wrap'):
+                                with ui.row().classes('items-center gap-4'):
+                                    ui.label(f"Port {i}").classes('text-bold text-h6 w-16')
+                                    
+                                    img = ui.image().classes('w-10 h-10 object-contain bg-white rounded shadow-sm')
+                                    img.bind_source_from(settings, str(i), backward=get_icon_src)
+                                    img.bind_visibility_from(settings, str(i), backward=lambda pid: bool(get_icon_src(pid)))
+                                    
+                                    sensor_type_label = ui.label().classes('text-subtitle1 text-grey-4')
+                                    sensor_type_label.bind_text_from(settings, str(i), backward=lambda type_str: type_str if type_str else "Empty")
+                                
+                                name_label = ui.label().classes('text-subtitle1 font-bold')
+                                name_label.bind_text_from(settings, f"{i}_name")
+
+                        with ui.column().classes('w-full q-pa-md q-gutter-md'):
+                            with ui.row().classes('w-full items-center gap-4'):
+                                select = ui.select(available_sensors, value=settings.get(str(i), ""), label="Sensor Type").classes('w-64')
+                                select.bind_value(settings, str(i))
+                                select.on('update:model-value', on_setting_change)
+                                
+                                name_input = ui.input(label="Sensor Name", placeholder="e.g. Main Line Air").classes('w-64')
+                                name_input.bind_value(settings, f"{i}_name")
+                                # Explicitly bind to 'blur' or 'keyup.enter' to save without refreshing on every stroke
+                                name_input.on('blur', save_settings)
+                                name_input.on('keyup.enter', save_settings)
+
+                            with ui.row().classes('w-full items-center gap-4'):
+                                addr_input = ui.number(label="Modbus Address", value=settings.get(f"{i}_modbus_address", (i-1)*50), format="%d", on_change=save_settings).classes('w-32')
+                                addr_input.bind_value(settings, f"{i}_modbus_address")
+                                
+                                len_input = ui.number(label="Modbus Length", value=settings.get(f"{i}_modbus_length", 50), format="%d", on_change=save_settings).classes('w-32')
+                                len_input.bind_value(settings, f"{i}_modbus_length")
 
             with ui.row().classes('w-full items-center justify-between'):
                 ip_label = ui.label()
@@ -206,9 +208,39 @@ def config_page():
             ui.separator().classes('q-my-md')
             port_mapping_ui()
             
-        with ui.column().classes('w-1/3 q-ml-md dashboard-card items-center'):
-            ui.label("System Tools").classes('text-h6')
+        with ui.column().classes('w-full md:w-1/3 dashboard-card items-center'):
+            ui.label("System Settings").classes('text-h6')
             
+            with ui.expansion('Data Logging Settings', icon='save').classes('w-full bg-dark rounded q-my-sm'):
+                ui.checkbox("Enable Local Logging").bind_value(settings, "enable_logging").on('update:model-value', save_settings)
+                ui.number("Logging Interval (s)", value=10.0, format="%.1f").bind_value(settings, "logging_interval").on('update:model-value', save_settings)
+                ui.number("Data Retention (days)", value=7.0, format="%.1f").bind_value(settings, "data_retention_days").on('update:model-value', save_settings)
+
+                def confirm_reset():
+                    with ui.dialog() as dialog, ui.card():
+                        ui.label("Are you sure you want to delete all historical sensor data? This cannot be undone.").classes('text-red font-bold q-mb-md')
+                        with ui.row().classes('w-full justify-end q-mt-md gap-4'):
+                            ui.button("Cancel", on_click=dialog.close).props('flat')
+                            def do_reset():
+                                if data_logger.clear_database():
+                                    ui.notify("Database cleared successfully.", type="positive")
+                                else:
+                                    ui.notify("Failed to clear database.", type="negative")
+                                dialog.close()
+                            ui.button("Reset Database", color='red', on_click=do_reset)
+                    dialog.open()
+                
+                ui.button("Reset Database", color='red', icon='delete_forever', on_click=confirm_reset).classes('q-mt-md')
+
+            with ui.expansion('OPC-UA Compressor Settings', icon='settings_input_component').classes('w-full bg-dark rounded q-my-sm'):
+                ui.input(label="OPC-UA Server IP").classes('w-full').bind_value(settings, "opcua_ip").on('update:model-value', save_settings)
+                ui.input(label="Pressure Node ID").classes('w-full').bind_value(settings, "opcua_node_pressure").on('update:model-value', save_settings)
+                ui.input(label="Temp Node ID").classes('w-full').bind_value(settings, "opcua_node_temp").on('update:model-value', save_settings)
+                ui.input(label="Hours Node ID").classes('w-full').bind_value(settings, "opcua_node_hours").on('update:model-value', save_settings)
+                ui.input(label="State Node ID").classes('w-full').bind_value(settings, "opcua_node_state").on('update:model-value', save_settings)
+                ui.input(label="Start Node ID").classes('w-full').bind_value(settings, "opcua_node_start").on('update:model-value', save_settings)
+                ui.input(label="Stop Node ID").classes('w-full').bind_value(settings, "opcua_node_stop").on('update:model-value', save_settings)
+
             ui.label("Simulation Mode").classes('text-subtitle1 q-mt-sm font-bold text-grey')
             SimulationToggle(initial_state=settings.get("use_simulation", False))
             ui.separator().classes('w-full q-my-md')
@@ -227,6 +259,37 @@ def config_page():
 
             ui.upload(on_upload=handle_upload, label="Upload IODD Zip").classes('w-full max-w-sm')
             ui.separator().classes('w-full q-my-md')
-            ui.label("Remote Access").classes('text-subtitle1')
-            # Mock QR code for now
-            ui.html('<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://local_ip:8080" />')
+            ui.label("Remote Access").classes('text-h6')
+            
+            # Use the existing get_network_interfaces to find the actual IP
+            interfaces = get_network_interfaces()
+            
+            wlan_iface = next((i for i in interfaces if "wlan" in i["iface"]), None)
+            default_ip = "127.0.0.1"
+            
+            if wlan_iface:
+                default_ip = wlan_iface["ip"].split("/")[0]
+            else:
+                for iface in interfaces:
+                    if iface["ip"].startswith("127."):
+                        continue
+                    default_ip = iface["ip"].split("/")[0]
+                    break
+
+            # Deduplicate by interface name and ip
+            ip_options = {}
+            for iface in interfaces:
+                ip_addr = iface["ip"].split("/")[0]
+                ip_options[ip_addr] = f'{iface["iface"]} ({ip_addr})'
+                
+            remote_ip = ui.select(ip_options, value=default_ip, label="Select Network Interface").classes('w-full')
+
+            @ui.refreshable
+            def render_qr():
+                current_ip = remote_ip.value
+                ui.html(f'<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://{current_ip}:8080" />')
+                ui.label(f"http://{current_ip}:8080").classes('text-subtitle1 text-grey font-mono q-mt-sm')
+
+            remote_ip.on('update:model-value', render_qr.refresh)
+            # Render initially
+            render_qr()

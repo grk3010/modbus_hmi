@@ -27,3 +27,8 @@ hmi_settings.json
 # If you only want to track the original generic scripts and allow users to upload their own IODDs, uncomment below:
 # iodd_files/extracted_*/
 # iodd_files/*.zip
+
+# Databases
+*.db
+*.sqlite3
+sensor_data.db
