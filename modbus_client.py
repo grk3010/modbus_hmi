@@ -7,6 +7,9 @@ from pycomm3 import CIPDriver, Services
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
+# Suppress pycomm3 from logging expected connection/service errors during discovery
+logging.getLogger('pycomm3').setLevel(logging.CRITICAL)
+
 class ModbusClient:
     def __init__(self, host="127.0.0.1", port=502):
         self.host = host
@@ -53,7 +56,7 @@ class ModbusClient:
             # Fallback if invalid base_ip format
             test_ips = ["127.0.0.1", "192.168.1.100", "192.168.1.101", "10.0.0.100"]
         
-        sem = asyncio.Semaphore(50)  # Limit concurrent connections so we don't exhaust file descriptors
+        sem = asyncio.Semaphore(20)  # Limit concurrent connections so we don't exhaust file descriptors and overwhelm the network
         
         async def check_ip(ip):
             async with sem:

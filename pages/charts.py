@@ -9,42 +9,41 @@ def charts_page():
         ui.label('Historical Data').classes('text-h5 font-bold')
         ui.space()
         
-    with ui.column().classes('w-full q-pa-md items-center'):
-        controls_card = ui.card().classes('w-full max-w-[1200px] mb-4 bg-dark text-white p-4')
-        with controls_card:
-            with ui.row().classes('w-full justify-between items-center'):
-                with ui.row().classes('items-center gap-4'):
-                    ui.label("Time Window:").classes('text-bold')
-                    hours_select = ui.select({1: 'Last 1 Hour', 6: 'Last 6 Hours', 24: 'Last 24 Hours'}, value=1).classes('w-48')
-                
-                # Check logging status and display banner if off
-                if not settings.get("enable_logging", False):
-                    with ui.row().classes('items-center gap-2 bg-red-900/50 text-red-200 p-2 rounded border border-red-700'):
-                        ui.icon('warning', size='sm')
-                        ui.label("Local Logging is currently disabled.")
-                        ui.button("Enable in Config", on_click=lambda: ui.navigate.to('/config')).props('flat size=sm').classes('ml-2 text-white')
+    with ui.column().classes('w-full q-pa-sm items-center gap-2'):
+        chart_card = ui.card().classes('w-full max-w-[1200px] bg-dark text-white p-4 shadow-2')
+        with chart_card:
+            # We will populate the options dynamically
+            chart = ui.echart({
+                'tooltip': {'trigger': 'axis'},
+                'legend': {'data': [], 'textStyle': {'color': '#ccc'}, 'bottom': 0},
+                'grid': {'left': '5%', 'right': '5%', 'top': '10%', 'bottom': '18%', 'containLabel': True},
+                'xAxis': {'type': 'time', 'splitLine': {'show': False}, 'axisLabel': {'color': '#ccc'}},
+                'yAxis': [
+                    {'type': 'value', 'name': 'Pres', 'position': 'left', 'offset': 0, 'axisLabel': {'color': '#ffd700'}, 'nameTextStyle': {'color': '#ffd700', 'padding': [0, 0, 0, 10]}, 'splitLine': {'lineStyle': {'color': '#333'}}},
+                    {'type': 'value', 'name': 'Flow', 'position': 'left', 'offset': 60, 'axisLabel': {'color': '#00ffff'}, 'nameTextStyle': {'color': '#00ffff', 'padding': [0, 0, 0, 10]}, 'splitLine': {'show': False}},
+                    {'type': 'value', 'name': 'Temp', 'position': 'right', 'offset': 0, 'axisLabel': {'color': '#ff4500'}, 'nameTextStyle': {'color': '#ff4500', 'padding': [0, 10, 0, 0]}, 'splitLine': {'show': False}},
+                    {'type': 'value', 'name': 'Hum', 'position': 'right', 'offset': 60, 'axisLabel': {'color': '#32cd32'}, 'nameTextStyle': {'color': '#32cd32', 'padding': [0, 10, 0, 0]}, 'splitLine': {'show': False}},
+                    {'show': False, 'type': 'value', 'name': 'Misc', 'position': 'right', 'offset': 120, 'axisLabel': {'color': '#ff69b4'}, 'nameTextStyle': {'color': '#ff69b4', 'padding': [0, 10, 0, 0]}, 'splitLine': {'show': False}}
+                ],
+                'series': [],
+                'dataZoom': [{'type': 'inside'}, {'type': 'slider', 'bottom': '8%', 'height': 20}]
+            }).classes('w-full h-[450px]')
+        
+        legend_container = ui.row().classes('w-full max-w-[1200px] mt-2 justify-center gap-4 flex-nowrap overflow-x-auto p-2')
+        
+        controls_row = ui.row().classes('w-full max-w-[1200px] justify-between items-center bg-dark/50 q-pa-sm rounded mt-2')
+        with controls_row:
+            with ui.row().classes('items-center gap-4'):
+                ui.label("Time Window:").classes('text-bold text-grey-4')
+                hours_select = ui.select({1: 'Last 1 Hour', 6: 'Last 6 Hours', 24: 'Last 24 Hours'}, value=1).classes('w-48').props('dark rounded outlined dense')
+            
+            # Check logging status and display banner if off
+            if not settings.get("enable_logging", False):
+                with ui.row().classes('items-center gap-2 bg-red-900/40 text-red-200 px-3 py-1 rounded border border-red-700'):
+                    ui.icon('warning', size='sm')
+                    ui.label("Logging disabled").classes('text-xs')
+                    ui.button("Enable", on_click=lambda: ui.navigate.to('/config')).props('flat size=xs').classes('text-white underline')
 
-        chart_card = ui.card().classes('w-full max-w-[1200px] bg-dark text-white p-4')
-        
-        # We will populate the options dynamically
-        chart = ui.echart({
-            'tooltip': {'trigger': 'axis'},
-            'legend': {'data': [], 'textStyle': {'color': '#ccc'}, 'bottom': 0},
-            'grid': {'left': '5%', 'right': '5%', 'bottom': '15%', 'containLabel': True},
-            'xAxis': {'type': 'time', 'splitLine': {'show': False}, 'axisLabel': {'color': '#ccc'}},
-            'yAxis': [
-                {'type': 'value', 'name': 'Pressure', 'position': 'left', 'offset': 0, 'axisLabel': {'color': '#ffd700'}, 'nameTextStyle': {'color': '#ffd700'}, 'splitLine': {'lineStyle': {'color': '#333'}}},
-                {'type': 'value', 'name': 'Flow', 'position': 'left', 'offset': 60, 'axisLabel': {'color': '#00ffff'}, 'nameTextStyle': {'color': '#00ffff'}, 'splitLine': {'show': False}},
-                {'type': 'value', 'name': 'Temp', 'position': 'right', 'offset': 0, 'axisLabel': {'color': '#ff4500'}, 'nameTextStyle': {'color': '#ff4500'}, 'splitLine': {'show': False}},
-                {'type': 'value', 'name': 'Humidity', 'position': 'right', 'offset': 60, 'axisLabel': {'color': '#32cd32'}, 'nameTextStyle': {'color': '#32cd32'}, 'splitLine': {'show': False}},
-                {'show': False, 'type': 'value', 'name': 'Misc', 'position': 'right', 'offset': 120, 'axisLabel': {'color': '#ff69b4'}, 'nameTextStyle': {'color': '#ff69b4'}, 'splitLine': {'show': False}}
-            ],
-            'series': [],
-            'dataZoom': [{'type': 'inside'}, {'type': 'slider', 'bottom': '5%'}]
-        }).classes('w-full h-[600px]')
-        
-        legend_container = ui.row().classes('w-full max-w-[1200px] mt-8 justify-center gap-4 flex-wrap')
-        
         async def fetch_and_render():
             hrs = hours_select.value
             data = await data_logger.get_historical_data_async(hours_back=hrs)
@@ -70,7 +69,7 @@ def charts_page():
                 # Apply scaling mapped unit
                 t_gp1, p_gp1, f_gp1 = get_effective_units(port)
                 
-                if "MP-F" in s_type:
+                if "MP-F" in s_type or "MP-FN" in s_type:
                     # Flow (Axis 1 - Left Offset)
                     flow = apply_unit_scaling(metrics.get('1FlowInst', 0), 'flow', port)
                     flow_name = f"{port_name} Flow ({f_gp1})"
@@ -139,7 +138,7 @@ def charts_page():
             
             with legend_container:
                 # Get unique ports that have data
-                active_ports = list(set([s['port'] for s in series_list]))
+                active_ports = sorted(list(set([s['port'] for s in series_list])))
                 
                 # We need a state variable to track if we are currently isolating a sensor
                 isolation_state = {'active_port': None}
@@ -158,10 +157,10 @@ def charts_page():
                     chart.update()
 
                 # "All Sensors" Reset Button
-                with ui.card().classes('cursor-pointer hover:bg-gray-800 transition-colors w-32 items-center flex flex-col p-2 bg-indigo-900 border border-indigo-500').on('click', lambda: on_sensor_click(None)):
-                    with ui.element('div').classes('h-16 w-16 bg-white/10 rounded shadow-sm q-pa-sm flex items-center justify-center'):
-                        ui.icon('apps', size='2.5rem').classes('text-white drop-shadow-sm')
-                    ui.label("Show All").classes('text-xs font-bold text-center mt-2')
+                with ui.card().classes('cursor-pointer hover:bg-gray-800 transition-colors shrink-0 w-28 items-center flex flex-col p-2 bg-indigo-900 border border-indigo-500').on('click', lambda: on_sensor_click(None)):
+                    with ui.element('div').classes('h-12 w-12 bg-white/10 rounded shadow-sm flex items-center justify-center'):
+                        ui.icon('apps', size='1.8rem').classes('text-white drop-shadow-sm')
+                    ui.label("Show All").classes('text-[10px] font-bold text-center mt-1 uppercase')
 
                 for p in active_ports:
                     s_type = settings.get(str(p), "")
@@ -171,11 +170,11 @@ def charts_page():
                     img_src = pic_path if pic_path else icon_path
                     p_name = settings.get(f"{p}_name", f"Port {p}")
                     
-                    with ui.card().classes('cursor-pointer hover:bg-gray-800 transition-colors w-32 items-center flex flex-col p-2').on('click', lambda port=p: on_sensor_click(port)):
+                    with ui.card().classes('cursor-pointer hover:bg-gray-800 transition-colors shrink-0 w-28 items-center flex flex-col p-2 bg-[#1a1c1e] border border-gray-700').on('click', lambda port=p: on_sensor_click(port)):
                         if img_src:
                             rel_src = f"/iodd_assets/{os.path.relpath(img_src, os.path.abspath(IODD_DIR))}"
-                            ui.image(rel_src).classes('h-16 w-16 object-contain bg-white rounded shadow-sm q-pa-sm').props('fit="contain"')
-                        ui.label(p_name).classes('text-xs font-bold text-center mt-2')
+                            ui.image(rel_src).classes('h-12 w-12 object-contain bg-white rounded shadow-sm q-pa-xs').props('fit="contain"')
+                        ui.label(p_name).classes('text-[10px] font-bold text-center mt-1 truncate w-full')
 
         hours_select.on_value_change(fetch_and_render)
         ui.timer(0.1, fetch_and_render, once=True)
