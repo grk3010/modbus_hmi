@@ -46,13 +46,13 @@ def sensor_page(port_id: str):
                 with ui.row().classes('w-full justify-around items-center q-pa-md'):
                     with ui.column().classes('items-center'):
                         ui.label(f"Temperature ({temp_unit})").classes('text-subtitle1 text-grey')
-                        elements['temp_knob'] = ui.knob(0, min=-50, max=150, show_value=True).props('color="red" size="120px" track-color="dark"')
+                        elements['temp_knob'] = ui.knob(0, min=-50, max=150, show_value=True).props('color="red" size="120px" track-color="dark" readonly disable')
                     with ui.column().classes('items-center'):
                         ui.label(f"Pressure ({pres_unit})").classes('text-subtitle1 text-grey')
-                        elements['pres_knob'] = ui.knob(0, min=0, max=10000, show_value=True).props('color="orange" size="120px" track-color="dark"')
+                        elements['pres_knob'] = ui.knob(0, min=0, max=10000, show_value=True).props('color="orange" size="120px" track-color="dark" readonly disable')
                     with ui.column().classes('items-center'):
                         ui.label(f"Humidity (%)").classes('text-subtitle1 text-grey')
-                        elements['hum_knob'] = ui.knob(0, min=0, max=100, show_value=True).props('color="blue" size="120px" track-color="dark"')
+                        elements['hum_knob'] = ui.knob(0, min=0, max=100, show_value=True).props('color="blue" size="120px" track-color="dark" readonly disable')
 
                 with ui.row().classes('w-full items-end q-pa-md q-px-xl justify-between flex-nowrap gap-6'):
                     with ui.column().classes('flex-grow'):
@@ -70,16 +70,16 @@ def sensor_page(port_id: str):
 
                 with ui.row().classes('w-full justify-center items-center q-pa-sm q-mt-sm gap-4'):
                     ui.label("Valve State:").classes('text-h6 text-grey font-bold')
-                    ValveToggle(port_num, initial_state=False, client=modbus_client)
+                    elements['valve_toggle'] = ValveToggle(port_num, initial_state=False, client=modbus_client)
 
             elif "GP-M" in sensor_type:
                 with ui.row().classes('w-full justify-around items-center q-pa-md'):
                     with ui.column().classes('items-center'):
                         ui.label(f"Pressure ({pres_unit})").classes('text-subtitle1 text-grey')
-                        elements['pres_knob'] = ui.knob(0, min=-50, max=10000, show_value=True).props('color="orange" size="150px" track-color="dark"')
+                        elements['pres_knob'] = ui.knob(0, min=-50, max=10000, show_value=True).props('color="orange" size="150px" track-color="dark" readonly disable')
                     with ui.column().classes('items-center'):
                         ui.label(f"Temperature ({temp_unit})").classes('text-subtitle1 text-grey')
-                        elements['temp_knob'] = ui.knob(0, min=-50, max=300, show_value=True).props('color="red" size="150px" track-color="dark"')
+                        elements['temp_knob'] = ui.knob(0, min=-50, max=300, show_value=True).props('color="red" size="150px" track-color="dark" readonly disable')
             else:
                 elements['generic'] = ui.label("")
                 
@@ -121,12 +121,36 @@ def sensor_page(port_id: str):
             
             temp_unit, pres_unit, flow_unit = get_effective_units(port_num)
             
+            def _get_sensor_val(key, v_type):
+                # Try to find value by key (either simplified ID or descriptive label)
+                raw_val = data.get(key)
+                if raw_val is None:
+                    # Fallback: check if we have it under a descriptive name from IODD
+                    smap = sensor_parser.get_sensor_map(sensor_type)
+                    for k, v in smap.items():
+                        if v.get('display_name') and key in v['display_name']:
+                             raw_val = data.get(k)
+                             break
+                
+                if raw_val is None: return 0.0
+
+                # Apply scaling
+                val = apply_unit_scaling(raw_val, v_type, port_num)
+                
+                # Keyence sensors often have a 0.1 multiplier for the base unit
+                val /= 10.0
+                return val
+
             if "MP-F" in sensor_type:
-                flow = apply_unit_scaling(data.get('1FlowInst', 0), 'flow', port_num)
+                flow = _get_sensor_val('1FlowInst', 'flow')
+                # Total flow is often L or ft^3, might not need /10, but let's stay consistent with IOLink 
+                # actually 1FlowTotal is usually integer L. Let's check.
                 flow_tot = apply_unit_scaling(data.get('1FlowTotal', 0), 'flow_total', port_num)
-                pressure = apply_unit_scaling(data.get('1Pressure', 0), 'pres', port_num)
-                temp = apply_unit_scaling(data.get('1Temperature', 0) / 10.0, 'temp', port_num)
-                hum = data.get('1Humidity', 0) / 10.0
+                
+                pressure = _get_sensor_val('1Pressure', 'pres')
+                temp = _get_sensor_val('1Temperature', 'temp')
+                hum = _get_sensor_val('1Humidity', 'hum')
+                
                 max_flow = float(settings.get(f"{port_num}_max_flow", 1000.0))
                 
                 elements.get('temp_knob', ui.knob()).value = round(temp, 1)
@@ -136,9 +160,18 @@ def sensor_page(port_id: str):
                 elements.get('flow_bar', ui.linear_progress()).value = min(flow / max(max_flow, 1.0), 1.0)
                 elements.get('flow_lbl', ui.label()).set_text(f"{round(flow, 1)} {flow_unit}")
                 elements.get('flow_tot_lbl', ui.label()).set_text(f"{round(flow_tot, 1)} {flow_unit}")
+                
+                # Fetch live valve state (0 = closed, 1 = open)
+                v_state_raw = _get_sensor_val('1ValveState', 'boolean')
+                
+                if 'valve_toggle' in elements:
+                    # In Keyence MP-F, ValveState 0 means closed, 1 means open
+                    is_open = bool(int(v_state_raw * 10.0))  # reverse the /10.0 done in _get_sensor_val
+                    elements['valve_toggle'].update_state(is_open)
+
             elif "GP-M" in sensor_type:
-                pressure = apply_unit_scaling(data.get('Pressure', 0), 'pres', port_num)
-                temp = apply_unit_scaling(data.get('Temp', 0) / 10.0, 'temp', port_num)
+                pressure = _get_sensor_val('Pressure', 'pres')
+                temp = _get_sensor_val('Temp', 'temp')
                 
                 elements.get('pres_knob', ui.knob()).value = round(pressure, 1)
                 elements.get('temp_knob', ui.knob()).value = round(temp, 1)

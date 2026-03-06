@@ -1,7 +1,7 @@
 from nicegui import ui
 import os
 from shared_state import settings, save_settings, modbus_client, sensor_parser, IODD_DIR, data_logger
-from components import SimulationToggle
+from components import SimulationToggle, HostNetworkToggle
 
 @ui.page('/config')
 def config_page():
@@ -69,6 +69,89 @@ def config_page():
                                 
                                 len_input = ui.number(label="Modbus Length", value=settings.get(f"{i}_modbus_length", 50), format="%d", on_change=save_settings).classes('w-32')
                                 len_input.bind_value(settings, f"{i}_modbus_length")
+
+                            def detect_native_units(pid):
+                                units = {"pres": None, "flow": None, "temp": None}
+                                if not pid: return units
+                                smap = sensor_parser.get_sensor_map(pid)
+                                for var in smap.values():
+                                    u = var.get("native_unit")
+                                    name = var.get("display_name", "").lower()
+                                    if u:
+                                        if "pressure" in name: units["pres"] = u
+                                        elif "flow" in name: units["flow"] = u
+                                        elif "temp" in name: units["temp"] = u
+                                return units
+
+                            with ui.row().classes('w-full items-center gap-4'):
+                                rescale_check = ui.checkbox("Enable Unit Rescaling").bind_value(settings, f"{i}_rescale").on('update:model-value', on_setting_change)
+                                
+                                native = detect_native_units(settings.get(str(i)))
+                                
+                                with ui.row().classes('gap-2').bind_visibility_from(settings, f"{i}_rescale"):
+                                    def setup_unit_select(label, key, native_unit):
+                                        current = settings.get(key)
+                                        if not current and native_unit:
+                                            settings[key] = native_unit
+                                        
+                                        s = ui.select(['kPa', 'MPa', 'psi', 'bar', 'L/min', 'CFM', '°C', '°F'], label=label).classes('w-32')
+                                        s.bind_value(settings, key).on('update:model-value', save_settings)
+                                        if native_unit:
+                                            s.props(f'suffix="({native_unit})"')
+                                            s.tooltip(f"Auto-detected native unit: {native_unit}")
+                                        return s
+
+                                    setup_unit_select("Scale From (Pres)", f"{i}_scale_from_pres", native["pres"])
+                                    setup_unit_select("Scale From (Flow)", f"{i}_scale_from_flow", native["flow"])
+                                    setup_unit_select("Scale From (Temp)", f"{i}_scale_from_temp", native["temp"])
+
+            ui.separator().classes('w-full q-my-md')
+
+            with ui.row().classes('w-full items-center justify-between q-mb-md q-pa-md bg-black/30 rounded border border-gray-700'):
+                with ui.column().classes('gap-1'):
+                    ui.label("Host IO-Link Master via Local Connection").classes('text-lg font-bold')
+                    ui.label("Configures eth0 as a DHCP server temporarily.").classes('text-sm text-grey-4')
+                    
+                    with ui.row().classes('items-center gap-2 q-mt-sm'):
+                        ui.label("Host IP Address:").classes('text-subtitle2 font-bold')
+                        host_ip_input = ui.input(value=settings.get("host_ip", "172.16.1.1")).classes('w-32')
+                        host_ip_input.props('dense outlined')
+                        def update_host_ip(e):
+                            settings["host_ip"] = e.value
+                            save_settings()
+                        host_ip_input.on('blur', lambda e: update_host_ip(host_ip_input))
+                        host_ip_input.on('keyup.enter', lambda e: update_host_ip(host_ip_input))
+
+                async def toggle_local_host(state):
+                    import asyncio
+                    settings["host_local_network"] = state
+                    save_settings()
+                    ip_to_use = settings.get("host_ip", "172.16.1.1")
+                    
+                    host_toggle.set_processing(True)
+                    try:
+                        if state:
+                            ui.notify(f"Configuring eth0 as DHCP Server ({ip_to_use})...", type="info", timeout=3000)
+                            process = await asyncio.create_subprocess_exec("sudo", "bash", "scripts/enable_local_host.sh", ip_to_use)
+                            await process.communicate()
+                            if process.returncode == 0:
+                                ui.notify("eth0 configured successfully.", type="positive")
+                            else:
+                                ui.notify(f"Failed to configure eth0: process returned {process.returncode}", type="negative")
+                        else:
+                            ui.notify("Reverting eth0 to automatic DHCP client...", type="info", timeout=3000)
+                            process = await asyncio.create_subprocess_exec("sudo", "bash", "scripts/disable_local_host.sh")
+                            await process.communicate()
+                            if process.returncode == 0:
+                                ui.notify("eth0 reverted successfully.", type="positive")
+                            else:
+                                ui.notify(f"Failed to revert eth0: process returned {process.returncode}", type="negative")
+                    except Exception as err:
+                        ui.notify(f"Error changing network state: {err}", type="negative")
+                    finally:
+                        host_toggle.set_processing(False)
+
+                host_toggle = HostNetworkToggle(initial_state=settings.get("host_local_network", False), on_change=toggle_local_host)
 
             with ui.row().classes('w-full items-center justify-between'):
                 ip_label = ui.label()
@@ -204,6 +287,11 @@ def config_page():
                 
                 flow_u = ui.select(['L/min', 'CFM'], value=settings.get("global_flow_unit", "L/min"), label="Global Flow Unit", on_change=port_mapping_ui.refresh).classes('w-32')
                 flow_u.bind_value(settings, "global_flow_unit")
+                
+            with ui.row().classes('items-center gap-6 q-mt-md'):
+                ui.label("Endianness (Swaps):").classes('text-grey-4 text-sm')
+                ui.checkbox("Byte Swap").bind_value(settings, "byte_swap").on('update:model-value', save_settings).props('dense')
+                ui.checkbox("Word Swap").bind_value(settings, "word_swap").on('update:model-value', save_settings).props('dense')
             
             ui.separator().classes('q-my-md')
             port_mapping_ui()
@@ -240,6 +328,26 @@ def config_page():
                 ui.input(label="State Node ID").classes('w-full').bind_value(settings, "opcua_node_state").on('update:model-value', save_settings)
                 ui.input(label="Start Node ID").classes('w-full').bind_value(settings, "opcua_node_start").on('update:model-value', save_settings)
                 ui.input(label="Stop Node ID").classes('w-full').bind_value(settings, "opcua_node_stop").on('update:model-value', save_settings)
+
+            with ui.expansion('Raw Data Diagnostic', icon='query_stats').classes('w-full bg-dark rounded q-my-sm'):
+                ui.label("Latest raw registers (Hex):").classes('text-xs text-grey-4 mb-2')
+                
+                # Update loop for raw data
+                raw_labels = {}
+                for p_idx in range(1, 9):
+                    with ui.row().classes('w-full items-center gap-2 no-wrap'):
+                        ui.label(f"P{p_idx}:").classes('text-bold w-6 text-xs')
+                        raw_labels[p_idx] = ui.label("[]").classes('font-mono text-xs truncate flex-1 overflow-hidden')
+                
+                def update_diagnostics():
+                    for p_idx, label in raw_labels.items():
+                        regs = modbus_client.port_raw_data.get(p_idx, [])
+                        if regs:
+                            label.text = " ".join([f"{r:04X}" for r in regs[:6]]) + ("..." if len(regs) > 6 else "")
+                        else:
+                            label.text = "No data"
+                
+                ui.timer(1.0, update_diagnostics)
 
             ui.label("Simulation Mode").classes('text-subtitle1 q-mt-sm font-bold text-grey')
             SimulationToggle(initial_state=settings.get("use_simulation", False))

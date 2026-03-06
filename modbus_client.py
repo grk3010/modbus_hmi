@@ -22,8 +22,13 @@ class ModbusClient:
         
         # Store latest decoded data for UI
         self.port_data = {i: {} for i in range(1, 9)}
+        self.port_raw_data = {i: [] for i in range(1, 9)} # For diagnostic UI
         self.port_status = {i: False for i in range(1, 9)}
         self.master_online = False
+        
+        # Endianness flags
+        self.byte_swap = False
+        self.word_swap = False
         
     async def connect(self):
         if self.client is None:
@@ -227,9 +232,22 @@ class ModbusClient:
         if len(padded_registers) < expected_words:
             padded_registers.extend([0] * (expected_words - len(padded_registers)))
 
+        # Apply byte/word swaps if configured
+        swapped_registers = []
+        for reg in padded_registers:
+            val = reg
+            if self.byte_swap:
+                val = ((val << 8) & 0xFF00) | ((val >> 8) & 0x00FF)
+            swapped_registers.append(val)
+        
+        if self.word_swap:
+            # Swap adjacent 16-bit words (typical for 32-bit values)
+            for i in range(0, len(swapped_registers) - 1, 2):
+                swapped_registers[i], swapped_registers[i+1] = swapped_registers[i+1], swapped_registers[i]
+
         # Convert registers to a single byte stream, assuming Big Endian for Modbus TCP
         # pymodbus returns registers as ints, we pack them into bytes
-        payload_bytes = b"".join(struct.pack(">H", reg) for reg in padded_registers)
+        payload_bytes = b"".join(struct.pack(">H", reg) for reg in swapped_registers)
         total_bits = len(payload_bytes) * 8
 
         decoded_data = {}
@@ -307,6 +325,9 @@ class ModbusClient:
                 continue
                 
             self.master_online = True
+            self.byte_swap = hmi_settings.get("byte_swap", False)
+            self.word_swap = hmi_settings.get("word_swap", False)
+            
             master_type = hmi_settings.get("master_type", "NQ-MP8L")
             max_ports = 8 if "8" in master_type else 4
 
@@ -326,6 +347,7 @@ class ModbusClient:
                     # Read defined registers per port
                     response = await self.client.read_holding_registers(address=address, count=count)
                     if not response.isError():
+                        self.port_raw_data[port_num] = response.registers
                         sensor_map = sensor_parser.get_sensor_map(product_id)
                         decoded = self.decode_payload(response.registers, sensor_map)
                         self.port_data[port_num] = decoded

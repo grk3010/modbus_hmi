@@ -49,6 +49,9 @@ class SensorParser:
             vendor_id = int(identity_node.get('vendorId', '0'))
             device_id = int(identity_node.get('deviceId', '0'))
             
+            # Build text dictionary
+            text_dict = self._get_text_dict(root, ns)
+            
             product_ids = []
             icons_map = {}
             pics_map = {}
@@ -77,9 +80,13 @@ class SensorParser:
             if pd_in is not None:
                 for item in pd_in.findall('.//io:RecordItem', ns):
                     name_node = item.find('io:Name', ns)
-                    name = name_node.get('textId') if name_node is not None else "Unknown"
-                    # simplify name
-                    name = name.replace("TI_PDIn", "").replace("TI_PD_ProcessData", "ProcessData")
+                    text_id = name_node.get('textId') if name_node is not None else "Unknown"
+                    raw_name = text_dict.get(text_id, "Unknown")
+                    
+                    # 1. Original simplified ID key (e.g. 1FlowInst)
+                    clean_id = text_id.replace("TI_PDIn", "").replace("TI_PD_ProcessData", "ProcessData")
+                    # 2. New descriptive key (e.g. InstantaneousFlow)
+                    clean_name = raw_name.replace(" ", "").replace("_", "")
                     
                     bit_offset = item.get('bitOffset')
                     
@@ -89,18 +96,21 @@ class SensorParser:
                     
                     if datatype_node is not None:
                         datatype = datatype_node.get('{http://www.w3.org/2001/XMLSchema-instance}type')
-                        # Sometimes bitLength is on the Datatype itself for SimpleDatatype
                         bit_length = datatype_node.get('bitLength', '1')
                     
-                    # If bit_offset is missing, calculate or ignore based on IODD structure
                     if bit_offset is not None:
-                        process_data[name] = {
+                        meta = {
                             "bit_offset": int(bit_offset),
                             "bit_length": int(bit_length),
-                            "datatype": datatype
+                            "datatype": datatype,
+                            "display_name": raw_name,
+                            "native_unit": self._guess_unit(raw_name)
                         }
+                        process_data[clean_id] = meta
+                        if clean_name != clean_id:
+                            process_data[clean_name] = meta
                     else:
-                        print(f"Skipping {name} due to missing bitOffset")
+                        print(f"Skipping {raw_name} due to missing bitOffset")
 
             # Map the parsed data to all product IDs found in this file
             for pid in product_ids:
@@ -112,6 +122,29 @@ class SensorParser:
 
         except Exception as e:
             print(f"Error parsing XML {xml_path}: {e}")
+
+    def _get_text_dict(self, root, ns):
+        """Extract all text translations from the IODD."""
+        texts = {}
+        for text_node in root.findall('.//io:ExternalTextCollection/io:PrimaryLanguage/io:Text', ns):
+            text_id = text_node.get('id')
+            value = text_node.get('value')
+            if text_id and value:
+                texts[text_id] = value
+        return texts
+
+    def _guess_unit(self, name):
+        """Guess the native unit based on the parameter name (Common for Keyence)."""
+        n = name.lower()
+        if "pressure" in n:
+            return "kPa"
+        if "flow" in n:
+            return "L/min"
+        if "temp" in n or "temperature" in n:
+            return "°C"
+        if "humidity" in n:
+            return "%"
+        return None
 
     def get_available_sensors(self):
         """Return a list of available sensor Product IDs."""
@@ -137,14 +170,8 @@ if __name__ == "__main__":
     parser = SensorParser()
     print("Available Sensors:", parser.get_available_sensors())
     
-    mp_map = parser.get_sensor_map("MP-FR80/MP-FG80/MP-FN80")
-    print(f"\nMP-FN80 Map ({len(mp_map)} vars):")
-    for k, v in mp_map.items():
-        if k in ["1Pressure", "1FlowInst", "1Temperature", "1Humidity"]: # specific ones we care about
-            print(f"  {k}: {v}")
-
-    gpm_map = parser.get_sensor_map("GP-M010T")
-    print(f"\nGP-M010T Map ({len(gpm_map)} vars):")
-    for k, v in gpm_map.items():
-        if k in ["Pressure", "Temp"]:
-            print(f"  {k}: {v}")
+    for pid in ["MP-FR80/MP-FG80/MP-FN80", "GP-M010T"]:
+        s_map = parser.get_sensor_map(pid)
+        print(f"\n{pid} Map ({len(s_map)} vars):")
+        for k, v in list(s_map.items())[:5]:
+            print(f"  {k}: {v.get('native_unit')} ({v.get('display_name')})")

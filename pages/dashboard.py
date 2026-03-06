@@ -154,25 +154,46 @@ def index():
             
         def _get_val(p, key, unit, v_type):
             is_simulating = settings.get("use_simulation", False)
+            data = {}
             if is_simulating:
                 import random
                 s_type = settings.get(str(p), "")
-                val = 0.0
                 if "MP-F" in s_type:
-                    if key == '1FlowInst': val = random.uniform(10, 500) * 10
-                    elif key == '1Pressure': val = random.uniform(50, 800)
+                    data = {
+                        '1FlowInst': random.uniform(10, 500) * 10,
+                        '1Pressure': random.uniform(50, 800)
+                    }
                 elif "GP-M" in s_type:
-                    if key == 'Pressure': val = random.uniform(0, 5000)
-                    elif key == 'Temp': val = random.uniform(200, 800)
-                
-                val = apply_unit_scaling(val, v_type, int(p))
-                if v_type in ('temp', 'hum'): val /= 10.0
-                return f"{val:.1f} {unit}"
-
-            data = modbus_client.port_data.get(int(p), {})
+                    data = {
+                        'Pressure': random.uniform(0, 5000),
+                        'Temp': random.uniform(200, 800)
+                    }
+            else:
+                data = modbus_client.port_data.get(int(p), {})
+            
             if not data: return '---'
-            val = apply_unit_scaling(data.get(key, 0), v_type, int(p))
-            if v_type in ('temp', 'hum'): val /= 10.0
+
+            # Try to find value by key (either simplified ID or descriptive label)
+            raw_val = data.get(key)
+            if raw_val is None:
+                # Fallback: check if we have it under a descriptive name from IODD
+                pid = settings.get(str(p))
+                smap = sensor_parser.get_sensor_map(pid)
+                for k, v in smap.items():
+                    if v.get('display_name') and key in v['display_name']:
+                         raw_val = data.get(k)
+                         break
+            
+            if raw_val is None: return '---'
+
+            # Apply scaling
+            val = apply_unit_scaling(raw_val, v_type, int(p))
+            
+            # Keyence sensors often have a 0.1 multiplier for the base unit 
+            # (e.g. 100 on Modbus = 10.0 kPa or 10.0 L/min)
+            # This applies to MP-FN Flow/Pres and GP-M Temp/Pres
+            val /= 10.0
+            
             return f"{val:.1f} {unit}"
 
         # Get units

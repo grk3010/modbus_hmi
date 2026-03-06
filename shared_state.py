@@ -52,8 +52,12 @@ def apply_unit_scaling(val, v_type, port_num):
         return val
         
     start_u = settings.get(f"{port_num}_scale_from_{v_type}", "")
-    temp_u, pres_u = get_effective_units(port_num)
-    target_u = temp_u if v_type == 'temp' else pres_u
+    temp_u, pres_u, flow_u = get_effective_units(port_num)
+    
+    if v_type == 'temp': target_u = temp_u
+    elif v_type == 'pres': target_u = pres_u
+    elif v_type in ['flow', 'flow_total']: target_u = flow_u
+    else: return val
 
     if not start_u or not target_u or start_u == target_u:
         return val
