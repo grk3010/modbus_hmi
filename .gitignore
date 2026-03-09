@@ -32,3 +32,4 @@ hmi_settings.json
 *.db
 *.sqlite3
 sensor_data.db
+

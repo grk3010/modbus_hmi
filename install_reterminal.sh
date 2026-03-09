@@ -22,7 +22,7 @@ echo "========================================="
 
 echo "[1/4] Installing system dependencies..."
 apt-get update
-apt-get install -y python3-venv python3-pip
+apt-get install -y python3-venv python3-pip dnsmasq network-manager
 
 echo "[2/4] Setting up Python virtual environment..."
 cd "$APP_DIR" || { echo "App directory not found at $APP_DIR. Exiting."; exit 1; }
