@@ -298,7 +298,25 @@ def config_page():
             
         with ui.column().classes('w-full md:w-1/3 dashboard-card items-center'):
             ui.label("System Settings").classes('text-h6')
-            
+
+            with ui.expansion('Dashboard Slot Mapping', icon='dashboard').classes('w-full bg-dark rounded q-my-sm'):
+                ui.label("Manually assign physical ports to dashboard locations:").classes('text-xs text-grey-4 mb-2')
+                
+                port_options = {"Auto": "Auto Tracking"}
+                for p_idx in range(1, 9):
+                    port_options[str(p_idx)] = f"Port {p_idx}"
+                
+                slots = [
+                    ("slot_gp1", "Wet Air (GP-M)"),
+                    ("slot_gp2", "Dry Air (GP-M)"),
+                    ("slot_mp1", "Outlet 1 (MP-F)"),
+                    ("slot_mp2", "Outlet 2 (MP-F)"),
+                    ("slot_mp3", "Outlet 3 (MP-F)"),
+                ]
+                
+                for key, label in slots:
+                    ui.select(port_options, value=settings.get(key, "Auto"), label=label).classes('w-full').bind_value(settings, key).on('update:model-value', save_settings)
+
             with ui.expansion('Data Logging Settings', icon='save').classes('w-full bg-dark rounded q-my-sm'):
                 ui.checkbox("Enable Local Logging").bind_value(settings, "enable_logging").on('update:model-value', save_settings)
                 ui.number("Logging Interval (s)", value=10.0, format="%.1f").bind_value(settings, "logging_interval").on('update:model-value', save_settings)

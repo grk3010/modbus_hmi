@@ -22,11 +22,41 @@ def index():
     mp_ports = [p for p, t in settings.items() if p.isdigit() and "MP-F" in t]
     
     # Fallback to sensible defaults if unconfigured
-    gp1 = gp_ports[0] if len(gp_ports) > 0 else "1"
-    gp2 = gp_ports[1] if len(gp_ports) > 1 else "2"
-    mp1 = mp_ports[0] if len(mp_ports) > 0 else "3"
-    mp2 = mp_ports[1] if len(mp_ports) > 1 else "4"
-    mp3 = mp_ports[2] if len(mp_ports) > 2 else "5"
+    # Map detected sensors to slots while ensuring absolute uniqueness across all slots
+    used_ports = set()
+    
+    # First, reserve all manually assigned ports
+    manual_slots = ["slot_gp1", "slot_gp2", "slot_mp1", "slot_mp2", "slot_mp3"]
+    for s_key in manual_slots:
+        val = settings.get(s_key, "Auto")
+        if val != "Auto":
+            used_ports.add(str(val))
+
+    def assign_unique(slot_key, ports_list, index, default_p):
+        # 1. Check for manual override
+        manual_val = settings.get(slot_key, "Auto")
+        if manual_val != "Auto":
+            return str(manual_val)
+            
+        # 2. Try auto-detection if not overridden
+        port = ports_list[index] if len(ports_list) > index else default_p
+        
+        # If this port is already assigned (manually or previously auto-assigned), 
+        # pick the next available numeric ID
+        p_val = int(port) if port.isdigit() else 1
+        while str(port) in used_ports:
+            p_val += 1
+            port = str(p_val)
+            
+        used_ports.add(str(port))
+        return str(port)
+
+    # Assign roles based on common layout: GP for tanks, MP for outlets
+    gp1 = assign_unique("slot_gp1", gp_ports, 0, "2")
+    gp2 = assign_unique("slot_gp2", gp_ports, 1, "3")
+    mp1 = assign_unique("slot_mp1", mp_ports, 0, "1")
+    mp2 = assign_unique("slot_mp2", mp_ports, 1, "4")
+    mp3 = assign_unique("slot_mp3", mp_ports, 2, "5")
 
     ui_elements = {}
 
@@ -39,6 +69,18 @@ def index():
             @media (min-width: 768px) {
                 .desktop-view { display: block !important; }
                 .mobile-view { display: none !important; }
+            }
+            .red-x-container {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 30;
+                display: flex;
+                align-items: center;
+                justify-content: center;
             }
         </style>
     ''')
@@ -63,21 +105,33 @@ def index():
             # 2. GP-M010T #1 (Wet Tank Out)
             with ui.element('div').classes('absolute flex flex-col items-center interactive-element z-20 cursor-pointer').style('top: 18%; left: 47%;').on('click', lambda: ui.navigate.to(f'/sensor/{gp1}')):
                 ui.label(settings.get(f"{gp1}_name") or 'Wet Air').classes('text-white font-bold select-none drop-shadow-md q-mb-xs')
-                ui.image(gp_pic).classes('w-20 h-auto filter opacity-50 rounded-xl bg-white/10 p-2 drop-shadow hover:brightness-125 hover:opacity-100 transition-all')
+                with ui.element('div').classes('relative'):
+                    ui.image(gp_pic).classes('w-20 h-auto filter opacity-50 rounded-xl bg-white/10 p-2 drop-shadow hover:brightness-125 hover:opacity-100 transition-all')
+                    with ui.element('div').classes('red-x-container') as x:
+                        ui_elements['gp1_x'] = x
+                        ui.html('<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="10" y1="10" x2="90" y2="90" stroke="red" stroke-width="4"/><line x1="90" y1="10" x2="10" y2="90" stroke="red" stroke-width="4"/></svg>')
                 with ui.row().classes('live-badge q-mt-sm whitespace-nowrap'):
                     ui_elements['gp1_val'] = ui.label('---')
             
             # 3. GP-M010T #2 (Dry Tank In)
             with ui.element('div').classes('absolute flex flex-col items-center interactive-element z-20 cursor-pointer').style('top: 61%; left: 65%;').on('click', lambda: ui.navigate.to(f'/sensor/{gp2}')):
                 ui.label(settings.get(f"{gp2}_name") or 'Dry Air').classes('text-white font-bold select-none drop-shadow-md q-mb-xs')
-                ui.image(gp_pic).classes('w-20 h-auto filter opacity-50 rounded-xl bg-white/10 p-2 drop-shadow hover:brightness-125 hover:opacity-100 transition-all')
+                with ui.element('div').classes('relative'):
+                    ui.image(gp_pic).classes('w-20 h-auto filter opacity-50 rounded-xl bg-white/10 p-2 drop-shadow hover:brightness-125 hover:opacity-100 transition-all')
+                    with ui.element('div').classes('red-x-container') as x:
+                        ui_elements['gp2_x'] = x
+                        ui.html('<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="10" y1="10" x2="90" y2="90" stroke="red" stroke-width="4"/><line x1="90" y1="10" x2="10" y2="90" stroke="red" stroke-width="4"/></svg>')
                 with ui.row().classes('live-badge q-mt-sm whitespace-nowrap'):
                     ui_elements['gp2_val'] = ui.label('---')
 
             # 4. MP-FN80 #1 (Outlet 1)
             with ui.element('div').classes('absolute flex flex-col items-center interactive-element z-20 cursor-pointer').style('top: 18%; left: 92%;').on('click', lambda: ui.navigate.to(f'/sensor/{mp1}')):
                 ui.label(settings.get(f"{mp1}_name") or 'Outlet 1').classes('text-white font-bold select-none drop-shadow-md q-mb-xs')
-                ui.image(mp_pic).classes('w-16 h-auto filter opacity-50 rounded-xl bg-white/10 p-2 drop-shadow hover:brightness-125 hover:opacity-100 transition-all')
+                with ui.element('div').classes('relative'):
+                    ui.image(mp_pic).classes('w-16 h-auto filter opacity-50 rounded-xl bg-white/10 p-2 drop-shadow hover:brightness-125 hover:opacity-100 transition-all')
+                    with ui.element('div').classes('red-x-container') as x:
+                        ui_elements['mp1_x'] = x
+                        ui.html('<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="10" y1="10" x2="90" y2="90" stroke="red" stroke-width="4"/><line x1="90" y1="10" x2="10" y2="90" stroke="red" stroke-width="4"/></svg>')
                 with ui.column().classes('live-badge q-mt-sm items-center gap-0'):
                     ui_elements['mp1_flow'] = ui.label('---')
                     ui_elements['mp1_pres'] = ui.label('---')
@@ -85,7 +139,11 @@ def index():
             # 5. MP-FN80 #2 (Outlet 2)
             with ui.element('div').classes('absolute flex flex-col items-center interactive-element z-20 cursor-pointer').style('top: 43%; left: 92%;').on('click', lambda: ui.navigate.to(f'/sensor/{mp2}')):
                 ui.label(settings.get(f"{mp2}_name") or 'Outlet 2').classes('text-white font-bold select-none drop-shadow-md q-mb-xs')
-                ui.image(mp_pic).classes('w-16 h-auto filter opacity-50 rounded-xl bg-white/10 p-2 drop-shadow hover:brightness-125 hover:opacity-100 transition-all')
+                with ui.element('div').classes('relative'):
+                    ui.image(mp_pic).classes('w-16 h-auto filter opacity-50 rounded-xl bg-white/10 p-2 drop-shadow hover:brightness-125 hover:opacity-100 transition-all')
+                    with ui.element('div').classes('red-x-container') as x:
+                        ui_elements['mp2_x'] = x
+                        ui.html('<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="10" y1="10" x2="90" y2="90" stroke="red" stroke-width="4"/><line x1="90" y1="10" x2="10" y2="90" stroke="red" stroke-width="4"/></svg>')
                 with ui.column().classes('live-badge q-mt-sm items-center gap-0'):
                     ui_elements['mp2_flow'] = ui.label('---')
                     ui_elements['mp2_pres'] = ui.label('---')
@@ -93,7 +151,11 @@ def index():
             # 6. MP-FN80 #3 (Outlet 3)
             with ui.element('div').classes('absolute flex flex-col items-center interactive-element z-20 cursor-pointer').style('top: 65%; left: 92%;').on('click', lambda: ui.navigate.to(f'/sensor/{mp3}')):
                 ui.label(settings.get(f"{mp3}_name") or 'Outlet 3').classes('text-white font-bold select-none drop-shadow-md q-mb-xs')
-                ui.image(mp_pic).classes('w-16 h-auto filter opacity-50 rounded-xl bg-white/10 p-2 drop-shadow hover:brightness-125 hover:opacity-100 transition-all')
+                with ui.element('div').classes('relative'):
+                    ui.image(mp_pic).classes('w-16 h-auto filter opacity-50 rounded-xl bg-white/10 p-2 drop-shadow hover:brightness-125 hover:opacity-100 transition-all')
+                    with ui.element('div').classes('red-x-container') as x:
+                        ui_elements['mp3_x'] = x
+                        ui.html('<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="10" y1="10" x2="90" y2="90" stroke="red" stroke-width="4"/><line x1="90" y1="10" x2="10" y2="90" stroke="red" stroke-width="4"/></svg>')
                 with ui.column().classes('live-badge q-mt-sm items-center gap-0'):
                     ui_elements['mp3_flow'] = ui.label('---')
                     ui_elements['mp3_pres'] = ui.label('---')
@@ -110,17 +172,21 @@ def index():
                         ui_elements['comp_status_mob'] = ui.label('Ready').classes('text-grey')
 
             # GP-M Cards
-            for p, name_fallback, key in [(gp1, 'Wet Air', 'gp1_val'), (gp2, 'Dry Air', 'gp2_val')]:
+            for p, name_fallback, key_prefix in [(gp1, 'Wet Air', 'gp1'), (gp2, 'Dry Air', 'gp2')]:
                 # We need a proper closure for the loop variables to avoid lambda bleeding
                 def _make_gp_card(port, fb_name, ui_key):
                     name = settings.get(f"{port}_name") or fb_name
                     with ui.card().classes('w-full bg-dark bg-opacity-80 p-4 border border-gray-700 cursor-pointer').on('click', lambda: ui.navigate.to(f'/sensor/{port}')):
                         with ui.row().classes('items-center justify-between w-full'):
                             with ui.row().classes('items-center gap-4'):
-                                ui.image(gp_pic).classes('w-12 h-12 object-contain filter opacity-80')
+                                with ui.element('div').classes('relative w-12 h-12'):
+                                    ui.image(gp_pic).classes('w-full h-full object-contain filter opacity-80')
+                                    with ui.element('div').classes('red-x-container') as x:
+                                        ui_elements[f'{ui_key}_x_mob'] = x
+                                        ui.html('<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="10" y1="10" x2="90" y2="90" stroke="red" stroke-width="4"/><line x1="90" y1="10" x2="10" y2="90" stroke="red" stroke-width="4"/></svg>')
                                 ui.label(name).classes('text-lg font-bold')
-                            ui_elements[f'{ui_key}_mob'] = ui.label('---').classes('text-xl text-primary font-bold')
-                _make_gp_card(p, name_fallback, key)
+                            ui_elements[f'{ui_key}_val_mob'] = ui.label('---').classes('text-xl text-primary font-bold')
+                _make_gp_card(p, name_fallback, key_prefix)
                 
             # MP-F Cards
             for p, name_fallback, key_prefix in [(mp1, 'Outlet 1', 'mp1'), (mp2, 'Outlet 2', 'mp2'), (mp3, 'Outlet 3', 'mp3')]:
@@ -129,7 +195,11 @@ def index():
                     with ui.card().classes('w-full bg-dark bg-opacity-80 p-4 border border-gray-700 cursor-pointer').on('click', lambda: ui.navigate.to(f'/sensor/{port}')):
                         with ui.row().classes('items-center justify-between w-full'):
                             with ui.row().classes('items-center gap-4'):
-                                ui.image(mp_pic).classes('w-12 h-12 object-contain filter opacity-80')
+                                with ui.element('div').classes('relative w-12 h-12'):
+                                    ui.image(mp_pic).classes('w-12 h-12 object-contain filter opacity-80')
+                                    with ui.element('div').classes('red-x-container') as x:
+                                        ui_elements[f'{ui_key}_x_mob'] = x
+                                        ui.html('<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="10" y1="10" x2="90" y2="90" stroke="red" stroke-width="4"/><line x1="90" y1="10" x2="10" y2="90" stroke="red" stroke-width="4"/></svg>')
                                 ui.label(name).classes('text-lg font-bold')
                             with ui.column().classes('gap-0 items-end'):
                                 ui_elements[f'{ui_key}_flow_mob'] = ui.label('---').classes('text-lg text-primary font-bold')
@@ -232,5 +302,14 @@ def index():
         ui_elements['mp3_pres'].set_text(p_m3)
         ui_elements['mp3_flow_mob'].set_text(f_m3)
         ui_elements['mp3_pres_mob'].set_text(p_m3)
+
+        # Update Red X overlays based on actual port status
+        is_sim = settings.get("use_simulation", False)
+        for p, key in [(gp1, 'gp1'), (gp2, 'gp2'), (mp1, 'mp1'), (mp2, 'mp2'), (mp3, 'mp3')]:
+            status = modbus_client.port_status.get(int(p), False) if not is_sim else True
+            if f'{key}_x' in ui_elements:
+                ui_elements[f'{key}_x'].set_visibility(not status)
+            if f'{key}_x_mob' in ui_elements:
+                ui_elements[f'{key}_x_mob'].set_visibility(not status)
 
     ui.timer(1.0, update_cards)
