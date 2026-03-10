@@ -8,6 +8,16 @@ def charts_page():
         ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/')).props('flat')
         ui.label('Historical Data').classes('text-h5 font-bold')
         ui.space()
+        with ui.row().classes('items-center gap-4'):
+            ui.label("Time Window:").classes('text-bold text-grey-4')
+            hours_select = ui.select({1: 'Last 1 Hour', 6: 'Last 6 Hours', 24: 'Last 24 Hours'}, value=1).classes('w-48').props('dark rounded outlined dense')
+        ui.space()
+        # Logging status notification (right side of title bar)
+        if not settings.get("enable_logging", False):
+            with ui.row().classes('items-center gap-2 bg-red-900/40 text-red-200 px-3 py-1 rounded border border-red-700'):
+                ui.icon('warning', size='sm')
+                ui.label("Logging disabled").classes('text-xs')
+                ui.button("Enable", on_click=lambda: ui.navigate.to('/config')).props('flat size=xs').classes('text-white underline')
         
     with ui.column().classes('w-full q-pa-sm items-center gap-2'):
         chart_card = ui.card().classes('w-full max-w-[1200px] bg-dark text-white p-4 shadow-2')
@@ -30,19 +40,6 @@ def charts_page():
             }).classes('w-full h-[450px]')
         
         legend_container = ui.row().classes('w-full max-w-[1200px] mt-2 justify-center gap-4 flex-nowrap overflow-x-auto p-2')
-        
-        controls_row = ui.row().classes('w-full max-w-[1200px] justify-between items-center bg-dark/50 q-pa-sm rounded mt-2')
-        with controls_row:
-            with ui.row().classes('items-center gap-4'):
-                ui.label("Time Window:").classes('text-bold text-grey-4')
-                hours_select = ui.select({1: 'Last 1 Hour', 6: 'Last 6 Hours', 24: 'Last 24 Hours'}, value=1).classes('w-48').props('dark rounded outlined dense')
-            
-            # Check logging status and display banner if off
-            if not settings.get("enable_logging", False):
-                with ui.row().classes('items-center gap-2 bg-red-900/40 text-red-200 px-3 py-1 rounded border border-red-700'):
-                    ui.icon('warning', size='sm')
-                    ui.label("Logging disabled").classes('text-xs')
-                    ui.button("Enable", on_click=lambda: ui.navigate.to('/config')).props('flat size=xs').classes('text-white underline')
 
         async def fetch_and_render():
             hrs = hours_select.value

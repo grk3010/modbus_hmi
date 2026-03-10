@@ -10,6 +10,13 @@ logger = logging.getLogger(__name__)
 # Suppress pycomm3 from logging expected connection/service errors during discovery
 logging.getLogger('pycomm3').setLevel(logging.CRITICAL)
 
+# Keyence NQ IO-Link Master Modbus register layouts.
+# Each master type has a header offset and a fixed block size per port.
+MASTER_LAYOUTS = {
+    "NQ-EP4L": {"header": 2, "block_size": 16, "max_ports": 4},
+    "NQ-MP8L": {"header": 2, "block_size": 16, "max_ports": 8},
+}
+
 class ModbusClient:
     def __init__(self, host="127.0.0.1", port=502):
         self.host = host
@@ -29,6 +36,42 @@ class ModbusClient:
         # Endianness flags
         self.byte_swap = False
         self.word_swap = False
+
+    @staticmethod
+    def get_modbus_layout(master_type, port_num, sensor_map=None):
+        """
+        Calculate the correct Modbus start address and register count for a given port
+        based on the master type's known register layout.
+        
+        Args:
+            master_type: e.g. "NQ-EP4L (4 Ports)" or "NQ-MP8L (8 Ports)"
+            port_num: IO-Link port number (1-based)
+            sensor_map: optional IODD sensor_map dict to compute exact PDI word count
+            
+        Returns:
+            (address, length) tuple
+        """
+        # Identify the layout from the master_type string
+        layout = None
+        for key, val in MASTER_LAYOUTS.items():
+            if key in master_type:
+                layout = val
+                break
+        
+        if layout is None:
+            # Unknown master — fall back to legacy defaults
+            return ((port_num - 1) * 50, 50)
+        
+        address = layout["header"] + (port_num - 1) * layout["block_size"]
+        
+        # Use IODD sensor map to calculate exact word count, or fall back to full block
+        if sensor_map:
+            max_bit = max((v["bit_offset"] + v["bit_length"] for v in sensor_map.values()), default=0)
+            length = (max_bit + 15) // 16  # ceil division to 16-bit words
+        else:
+            length = layout["block_size"]
+        
+        return (address, length)
         
     async def connect(self):
         if self.client is None:
@@ -374,25 +417,47 @@ class ModbusClient:
             return False
             
         # Keyence NQ Modbus mapping for Process Data Out starts at 2049
-        # Port 1 = 2049, Port 2 = 2065, ..., Port N = 2049 + (N-1)*16
         address = 2049 + ((port_num - 1) * 16)
         
-        # Per the MP-F IODD ProcessDataOut definition:
         # bitOffset 0 (Bit 0) = Valve Open -> Decimal 1
         # bitOffset 1 (Bit 1) = Valve Close -> Decimal 2
         val = 1 if state else 2
         
         try:
-            # Note: Depending on the Master's Endianness settings, the 8-bit ProcessDataOut 
-            # might be in the upper or lower byte of the 16-bit Modbus holding register.
-            # Writing the integer 1 (0x0001) or 2 (0x0002) targets the lower byte.
-            # If the master is set to big-endian process data, we would need to shift: `val << 8`.
-            # For now, we assume the default mapping is sufficient.
             response = await self.client.write_register(address, val)
             return not response.isError()
         except Exception as e:
             logger.error(f"Error writing valve to port {port_num}: {e}")
             return False
+
+    async def reset_accumulated_flow(self, port_num: int):
+        """
+        Resets the accumulated flow on Keyence MP-F sensors.
+        Sends a CIP explicit message to IO-Link ISDU Index 600, Subindex 0 with value 0.
+        """
+        def _do_reset():
+            try:
+                with CIPDriver(self.host) as master:
+                    # ISDU Write (Service 0x4C)
+                    # Index 600 = 0x0258. CIP expects LE: 0x58 0x02
+                    # Subindex 0 = 0x00
+                    # Data: 0 (1 byte for Accumulated Flow Reset command)
+                    req_data = (600).to_bytes(2, byteorder='little') + (0).to_bytes(1, byteorder='big') + (0).to_bytes(1, byteorder='big')
+                    
+                    resp = master.generic_message(
+                        service=0x4C, # ISDU_Write
+                        class_code=0x85,
+                        instance=0x01,
+                        attribute=port_num,
+                        request_data=req_data
+                    )
+                    return resp and not resp.error
+            except Exception as e:
+                logger.error(f"Failed to reset flow on port {port_num} via CIP: {e}")
+                return False
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _do_reset)
 
 if __name__ == "__main__":
     from scripts.parsing.sensor_parser import SensorParser

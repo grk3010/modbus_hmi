@@ -1,7 +1,7 @@
 from nicegui import ui
 import os
 from shared_state import settings, save_settings, modbus_client, sensor_parser, IODD_DIR, data_logger
-from components import SimulationToggle, HostNetworkToggle
+from components import SimulationToggle, HostNetworkToggle, KeyboardInput, NumberInput
 
 @ui.page('/config')
 def config_page():
@@ -57,18 +57,18 @@ def config_page():
                                 select.bind_value(settings, str(i))
                                 select.on('update:model-value', on_setting_change)
                                 
-                                name_input = ui.input(label="Sensor Name", placeholder="e.g. Main Line Air").classes('w-64')
+                                name_input = KeyboardInput(label="Sensor Name", placeholder="e.g. Main Line Air").classes('w-64')
                                 name_input.bind_value(settings, f"{i}_name")
                                 # Explicitly bind to 'blur' or 'keyup.enter' to save without refreshing on every stroke
                                 name_input.on('blur', save_settings)
                                 name_input.on('keyup.enter', save_settings)
 
                             with ui.row().classes('w-full items-center gap-4'):
-                                addr_input = ui.number(label="Modbus Address", value=settings.get(f"{i}_modbus_address", (i-1)*50), format="%d", on_change=save_settings).classes('w-32')
-                                addr_input.bind_value(settings, f"{i}_modbus_address")
+                                addr_input = NumberInput(label="Modbus Address", value=settings.get(f"{i}_modbus_address", (i-1)*50), format="%d").classes('w-32')
+                                addr_input.bind_value(settings, f"{i}_modbus_address").on('update:model-value', save_settings)
                                 
-                                len_input = ui.number(label="Modbus Length", value=settings.get(f"{i}_modbus_length", 50), format="%d", on_change=save_settings).classes('w-32')
-                                len_input.bind_value(settings, f"{i}_modbus_length")
+                                len_input = NumberInput(label="Modbus Length", value=settings.get(f"{i}_modbus_length", 50), format="%d").classes('w-32')
+                                len_input.bind_value(settings, f"{i}_modbus_length").on('update:model-value', save_settings)
 
                             def detect_native_units(pid):
                                 units = {"pres": None, "flow": None, "temp": None}
@@ -114,7 +114,7 @@ def config_page():
                     
                     with ui.row().classes('items-center gap-2 q-mt-sm'):
                         ui.label("Host IP Address:").classes('text-subtitle2 font-bold')
-                        host_ip_input = ui.input(value=settings.get("host_ip", "172.16.1.1")).classes('w-32')
+                        host_ip_input = KeyboardInput(value=settings.get("host_ip", "172.16.1.1")).classes('w-32')
                         host_ip_input.props('dense outlined')
                         def update_host_ip(e):
                             settings["host_ip"] = e.value
@@ -215,6 +215,8 @@ def config_page():
                                 
                                 sensors_mapped = 0
                                 available = sensor_parser.get_available_sensors()
+                                master_type = settings["master_type"]
+                                
                                 for port, info in discovered_sensors.items():
                                     prod_id_str = info.get("product_id_str")
                                     vid = info.get("vendor_id")
@@ -229,6 +231,13 @@ def config_page():
                                     if mapped_id:
                                         settings[str(port)] = mapped_id
                                         sensors_mapped += 1
+                                        
+                                        # Auto-calculate Modbus address and length from master layout + IODD
+                                        s_map = sensor_parser.get_sensor_map(mapped_id)
+                                        from modbus_client import ModbusClient
+                                        addr, length = ModbusClient.get_modbus_layout(master_type, port, s_map)
+                                        settings[f"{port}_modbus_address"] = addr
+                                        settings[f"{port}_modbus_length"] = length
                                 
                                 ui.notify(f"Discovery complete. Auto-mapped {sensors_mapped} sensors.", type="positive")
                                 save_settings()
@@ -339,13 +348,13 @@ def config_page():
                 ui.button("Reset Database", color='red', icon='delete_forever', on_click=confirm_reset).classes('q-mt-md')
 
             with ui.expansion('OPC-UA Compressor Settings', icon='settings_input_component').classes('w-full bg-dark rounded q-my-sm'):
-                ui.input(label="OPC-UA Server IP").classes('w-full').bind_value(settings, "opcua_ip").on('update:model-value', save_settings)
-                ui.input(label="Pressure Node ID").classes('w-full').bind_value(settings, "opcua_node_pressure").on('update:model-value', save_settings)
-                ui.input(label="Temp Node ID").classes('w-full').bind_value(settings, "opcua_node_temp").on('update:model-value', save_settings)
-                ui.input(label="Hours Node ID").classes('w-full').bind_value(settings, "opcua_node_hours").on('update:model-value', save_settings)
-                ui.input(label="State Node ID").classes('w-full').bind_value(settings, "opcua_node_state").on('update:model-value', save_settings)
-                ui.input(label="Start Node ID").classes('w-full').bind_value(settings, "opcua_node_start").on('update:model-value', save_settings)
-                ui.input(label="Stop Node ID").classes('w-full').bind_value(settings, "opcua_node_stop").on('update:model-value', save_settings)
+                KeyboardInput(label="OPC-UA Server IP").classes('w-full').bind_value(settings, "opcua_ip").on('update:model-value', save_settings)
+                KeyboardInput(label="Pressure Node ID").classes('w-full').bind_value(settings, "opcua_node_pressure").on('update:model-value', save_settings)
+                KeyboardInput(label="Temp Node ID").classes('w-full').bind_value(settings, "opcua_node_temp").on('update:model-value', save_settings)
+                KeyboardInput(label="Hours Node ID").classes('w-full').bind_value(settings, "opcua_node_hours").on('update:model-value', save_settings)
+                KeyboardInput(label="State Node ID").classes('w-full').bind_value(settings, "opcua_node_state").on('update:model-value', save_settings)
+                KeyboardInput(label="Start Node ID").classes('w-full').bind_value(settings, "opcua_node_start").on('update:model-value', save_settings)
+                KeyboardInput(label="Stop Node ID").classes('w-full').bind_value(settings, "opcua_node_stop").on('update:model-value', save_settings)
 
             with ui.expansion('Raw Data Diagnostic', icon='query_stats').classes('w-full bg-dark rounded q-my-sm'):
                 ui.label("Latest raw registers (Hex):").classes('text-xs text-grey-4 mb-2')
