@@ -5,6 +5,9 @@ from components import ValveToggle, GaugeSettingsDialog
 
 @ui.page('/sensor/{port_id}')
 def sensor_page(port_id: str):
+    ui.add_css('''
+    .text-gauge-color { color: var(--gauge-color) !important; }
+    ''')
     port_num = int(port_id)
     sensor_type = settings.get(str(port_num), "")
     custom_name = settings.get(f"{port_num}_name", "")
@@ -66,11 +69,11 @@ def sensor_page(port_id: str):
                     with ui.column().classes('items-center gap-24'):
                         with ui.column().classes('items-center cursor-pointer').on('click', lambda: open_settings('temp', f'Temperature ({temp_unit})')):
                             ui.label(f"Temp ({temp_unit})").classes('text-subtitle2 text-grey')
-                            elements['temp_knob'] = ui.knob(0, min=-50, max=200, show_value=True).props('size="105px" track-color="dark" readonly')
+                            elements['temp_knob'] = ui.knob(0, min=-50, max=200, show_value=True).props('size="105px" track-color="dark" readonly color="gauge-color"')
                         
                         with ui.column().classes('items-center cursor-pointer').on('click', lambda: open_settings('pres', f'Pressure ({pres_unit})')):
                             ui.label(f"Pressure ({pres_unit})").classes('text-subtitle2 text-grey')
-                            elements['pres_knob'] = ui.knob(0, min=0, max=200, show_value=True).props('size="105px" track-color="dark" readonly')
+                            elements['pres_knob'] = ui.knob(0, min=0, max=200, show_value=True).props('size="105px" track-color="dark" readonly color="gauge-color"')
 
                     # Center Column: Image over Valve
                     with ui.column().classes('items-center justify-between self-stretch py-2'):
@@ -86,11 +89,11 @@ def sensor_page(port_id: str):
                     with ui.column().classes('items-center gap-24'):
                         with ui.column().classes('items-center cursor-pointer').on('click', lambda: open_settings('hum', 'Humidity (%)')):
                             ui.label(f"Humidity (%)").classes('text-subtitle2 text-grey')
-                            elements['hum_knob'] = ui.knob(0, min=0, max=100, show_value=True).props('size="105px" track-color="dark" readonly')
+                            elements['hum_knob'] = ui.knob(0, min=0, max=100, show_value=True).props('size="105px" track-color="dark" readonly color="gauge-color"')
 
                         with ui.column().classes('items-center cursor-pointer').on('click', lambda: open_settings('flow', f'Flow Rate ({flow_unit})')):
                             ui.label(f"Flow Rate ({flow_unit})").classes('text-subtitle2 text-grey')
-                            elements['flow_knob'] = ui.knob(0, min=0, max=200, show_value=True).props('size="105px" track-color="dark" readonly')
+                            elements['flow_knob'] = ui.knob(0, min=0, max=200, show_value=True).props('size="105px" track-color="dark" readonly color="gauge-color"')
 
                 # Bottom Row: Total Flow & Reset Button
                 with ui.row().classes('w-full justify-center items-center q-pa-sm bg-black/20 rounded-b gap-8'):
@@ -98,14 +101,14 @@ def sensor_page(port_id: str):
                         ui.label("TOTAL FL:").classes('text-subtitle1 text-grey-5 font-bold')
                         elements['flow_tot_lbl'] = ui.label(f"0 {flow_unit}").classes('text-h6 text-white text-bold')
                     
-                    ui.button("Total Flow Reset", on_click=lambda: reset_flow(port_num)).props('rounded outline size=sm color=primary icon=history')
+                    ui.button("RESET", on_click=lambda: reset_flow(port_num)).classes('w-[168px] h-[72px] rounded-full border-4 border-solid border-white text-white font-bold text-lg tracking-wider shadow-sm shrink-0 scale-90').style('background-color: #303030 !important').props('unelevated no-caps')
 
             elif "GP-M" in sensor_type:
                 # GP-M Layout: Image center, Knobs left/right
                 with ui.row().classes('w-full justify-around items-center q-pa-lg'):
                     with ui.column().classes('items-center cursor-pointer').on('click', lambda: open_settings('pres', f'Pressure ({pres_unit})')):
                         ui.label(f"Pressure ({pres_unit})").classes('text-h6 text-grey')
-                        elements['pres_knob'] = ui.knob(0, min=-50, max=200, show_value=True).props('size="160px" track-color="dark" readonly')
+                        elements['pres_knob'] = ui.knob(0, min=-50, max=200, show_value=True).props('size="160px" track-color="dark" readonly color="gauge-color"')
                     
                     if img_src:
                         rel_src = f"/iodd_assets/{os.path.relpath(img_src, os.path.abspath(IODD_DIR))}"
@@ -113,7 +116,7 @@ def sensor_page(port_id: str):
 
                     with ui.column().classes('items-center cursor-pointer').on('click', lambda: open_settings('temp', f'Temperature ({temp_unit})')):
                         ui.label(f"Temp ({temp_unit})").classes('text-h6 text-grey')
-                        elements['temp_knob'] = ui.knob(0, min=-50, max=200, show_value=True).props('size="160px" track-color="dark" readonly')
+                        elements['temp_knob'] = ui.knob(0, min=-50, max=200, show_value=True).props('size="160px" track-color="dark" readonly color="gauge-color"')
             else:
                 elements['generic'] = ui.label("Generic Sensor Data").classes('text-h6 text-grey q-pa-xl')
                 
@@ -203,11 +206,10 @@ def sensor_page(port_id: str):
                     else:
                         color = color_norm
                         
-                    # Target both the text (via style) and the internal arc (via ui.query)
+                    # Target both the text and arc (via inherited style)
                     knob.value = round(val, 1)
                     knob.props(f'max={max_val}')
-                    knob.style(f'color: {color} !important')
-                    ui.query(f'#c{knob.id} .q-circular-progress__circle').style(f'color: {color} !important')
+                    knob.style(f'--gauge-color: {color} !important; color: {color} !important')
                     knob.update()
 
                 # Enforce Defaults: Temp 200, Pres 200, Hum 100, Flow 200
@@ -248,8 +250,7 @@ def sensor_page(port_id: str):
                     
                     knob.value = round(val, 1)
                     knob.props(f'max={max_val}')
-                    knob.style(f'color: {color} !important')
-                    ui.query(f'#c{knob.id} .q-circular-progress__circle').style(f'color: {color} !important')
+                    knob.style(f'--gauge-color: {color} !important; color: {color} !important')
                     knob.update()
 
                 update_knob('pres_knob', pressure, 'pres', 200, 160, 180, "#f59e0b", "#fbbf24", "#ef4444")
