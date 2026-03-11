@@ -49,18 +49,14 @@ class KeyboardDialog(ui.dialog):
         self._draw_keys()
 
     def _press(self, key):
-        print(f"Key pressed: {key}")
         self.input_data += key
         self.display.value = self.input_data
-        print(f"Current input: {self.input_data}")
 
     def _backspace(self):
-        print("Backspace pressed")
         self.input_data = self.input_data[:-1]
         self.display.value = self.input_data
 
     def _submit(self):
-        print(f"Submitting: {self.input_data}")
         if self.on_save:
             self.on_save(self.input_data)
         self.close()
@@ -143,6 +139,68 @@ class NumberInput(ui.number):
 
     def _open_numpad(self):
         NumpadDialog(self.label or "Enter Value", initial_value=self.value or 0, on_save=self._update_val).open()
+
+    def _update_val(self, new_val):
+        self.value = new_val
+
+class IPNumpadDialog(ui.dialog):
+    """Numpad dialog for entering IP addresses (allows multiple dots, returns string)."""
+    def __init__(self, title, initial_value='', on_save=None):
+        super().__init__()
+        self.input_data = str(initial_value)
+        self.on_save = on_save
+        
+        with self, ui.card().classes('w-80 bg-[#1a1c1e] text-white border-2 border-indigo-500 shadow-2xl items-center'):
+            ui.label(title).classes('text-h6 font-bold text-indigo-400 q-mb-sm')
+            self.display = ui.label(self.input_data).classes('text-h4 font-mono bg-black/40 w-full text-center q-pa-md rounded border border-gray-700 q-mb-md')
+            
+            grid = [
+                ['7', '8', '9'],
+                ['4', '5', '6'],
+                ['1', '2', '3'],
+                ['.', '0', '⌫']
+            ]
+            
+            with ui.column().classes('w-full gap-2'):
+                for row in grid:
+                    with ui.row().classes('w-full justify-around gap-2 no-wrap'):
+                        for key in row:
+                            if key == '⌫':
+                                ui.button(key, on_click=self._backspace).props('flat bg-orange-9 text-white text-h5').classes('w-20 h-16')
+                            else:
+                                ui.button(key, on_click=lambda k=key: self._press(k)).props('flat bg-grey-9 text-white text-h5').classes('w-20 h-16')
+                
+                with ui.row().classes('w-full justify-between q-mt-md px-2'):
+                    ui.button('CLEAR', on_click=self._clear).props('flat color=grey-5')
+                    ui.button('CANCEL', on_click=self.close).props('flat color=grey-5')
+                    ui.button('OK', on_click=self._submit).props('color=indigo text-white').classes('px-6')
+
+    def _press(self, key):
+        self.input_data += key
+        self.display.set_text(self.input_data)
+
+    def _backspace(self):
+        self.input_data = self.input_data[:-1]
+        self.display.set_text(self.input_data or '')
+
+    def _clear(self):
+        self.input_data = ''
+        self.display.set_text('')
+
+    def _submit(self):
+        if self.on_save:
+            self.on_save(self.input_data)
+        self.close()
+
+class IPAddressInput(ui.input):
+    """Input field that opens an IP-address numpad on click (touchscreen-friendly)."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.on('click', self._open_numpad)
+        self.props('readonly cursor-pointer')
+
+    def _open_numpad(self):
+        IPNumpadDialog(self.label or 'Enter IP Address', initial_value=self.value or '', on_save=self._update_val).open()
 
     def _update_val(self, new_val):
         self.value = new_val

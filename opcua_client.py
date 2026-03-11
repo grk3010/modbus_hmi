@@ -25,7 +25,7 @@ class OpcUaClient:
                 if self.client:
                     try:
                         await self.client.disconnect()
-                    except:
+                    except Exception:
                         pass
                 self.client = Client(url=url)
             

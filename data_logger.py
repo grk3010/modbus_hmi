@@ -49,10 +49,10 @@ class DataLogger:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute(f'''
+                cursor.execute('''
                     DELETE FROM sensor_logs 
-                    WHERE timestamp < datetime('now', '-{days} days')
-                ''')
+                    WHERE timestamp < datetime('now', ? || ' days')
+                ''', (f'-{days}',))
                 deleted_rows = cursor.rowcount
                 conn.commit()
                 if deleted_rows > 0:
@@ -90,12 +90,12 @@ class DataLogger:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute(f'''
+                cursor.execute('''
                     SELECT timestamp, port, sensor_type, data 
                     FROM sensor_logs 
-                    WHERE timestamp >= datetime('now', '-{hours_back} hours')
+                    WHERE timestamp >= datetime('now', ? || ' hours')
                     ORDER BY timestamp ASC
-                ''')
+                ''', (f'-{hours_back}',))
                 rows = cursor.fetchall()
                 
                 results = []

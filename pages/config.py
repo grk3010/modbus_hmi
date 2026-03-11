@@ -1,7 +1,7 @@
 from nicegui import ui
 import os
 from shared_state import settings, save_settings, modbus_client, sensor_parser, IODD_DIR, data_logger
-from components import SimulationToggle, HostNetworkToggle, KeyboardInput, NumberInput
+from components import SimulationToggle, HostNetworkToggle, KeyboardInput, NumberInput, IPAddressInput
 
 @ui.page('/config')
 def config_page():
@@ -114,13 +114,10 @@ def config_page():
                     
                     with ui.row().classes('items-center gap-2 q-mt-sm'):
                         ui.label("Host IP Address:").classes('text-subtitle2 font-bold')
-                        host_ip_input = KeyboardInput(value=settings.get("host_ip", "172.16.1.1")).classes('w-32')
+                        host_ip_input = IPAddressInput(label="Host IP", value=settings.get("host_ip", "172.16.1.1")).classes('w-32')
                         host_ip_input.props('dense outlined')
-                        def update_host_ip(e):
-                            settings["host_ip"] = e.value
-                            save_settings()
-                        host_ip_input.on('blur', lambda e: update_host_ip(host_ip_input))
-                        host_ip_input.on('keyup.enter', lambda e: update_host_ip(host_ip_input))
+                        host_ip_input.bind_value(settings, "host_ip")
+                        host_ip_input.on('update:model-value', save_settings)
 
                 async def toggle_local_host(state):
                     import asyncio
@@ -375,6 +372,111 @@ def config_page():
                             label.text = "No data"
                 
                 ui.timer(1.0, update_diagnostics)
+
+            with ui.expansion('System Updates', icon='system_update').classes('w-full bg-dark rounded q-my-sm'):
+
+                def get_current_version():
+                    try:
+                        version_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'VERSION')
+                        with open(version_file) as f:
+                            return f.read().strip()
+                    except Exception:
+                        return 'unknown'
+
+                with ui.row().classes('w-full items-center justify-between'):
+                    ui.label("Current Version").classes('text-grey-4')
+                    version_label = ui.label(get_current_version()).classes('font-mono font-bold text-primary')
+                
+                update_status = ui.label('').classes('text-xs text-grey-4 w-full')
+                update_log = ui.textarea().props('dark outlined readonly autogrow').classes('w-full font-mono text-xs hidden')
+
+                async def run_update_script(tarball_path=None):
+                    """Run update_dashboard.sh with optional tarball path for offline updates."""
+                    update_status.set_text('Applying update...')
+                    update_log.classes(remove='hidden')
+                    update_log.value = ''
+                    try:
+                        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        script = os.path.join(app_dir, 'update_dashboard.sh')
+                        cmd = ['bash', script]
+                        if tarball_path:
+                            cmd.append(tarball_path)
+                        proc = await asyncio.create_subprocess_exec(
+                            *cmd,
+                            cwd=app_dir,
+                            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+                        )
+                        stdout, _ = await proc.communicate()
+                        output = stdout.decode()
+                        update_log.value = output
+                        if proc.returncode == 0:
+                            version_label.set_text(get_current_version())
+                            update_status.set_text('Update applied successfully!')
+                            ui.notify('Update complete! Service will restart.', type='positive')
+                        else:
+                            update_status.set_text('Update failed. Check log below.')
+                            ui.notify('Update failed.', type='negative')
+                    except Exception as e:
+                        update_status.set_text(f'Error: {e}')
+
+                async def check_for_updates():
+                    update_status.set_text('Checking...')
+                    update_log.classes(remove='hidden')
+                    update_log.value = ''
+                    try:
+                        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        proc = await asyncio.create_subprocess_exec(
+                            'git', 'fetch', '--all',
+                            cwd=app_dir,
+                            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                        )
+                        await proc.communicate()
+
+                        proc_local = await asyncio.create_subprocess_exec(
+                            'git', 'rev-parse', 'HEAD',
+                            cwd=app_dir,
+                            stdout=asyncio.subprocess.PIPE
+                        )
+                        local_out, _ = await proc_local.communicate()
+                        local_hash = local_out.decode().strip()[:8]
+
+                        proc_remote = await asyncio.create_subprocess_exec(
+                            'git', 'rev-parse', '@{u}',
+                            cwd=app_dir,
+                            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                        )
+                        remote_out, remote_err = await proc_remote.communicate()
+                        remote_hash = remote_out.decode().strip()[:8]
+
+                        if proc_remote.returncode != 0:
+                            update_status.set_text('No upstream configured. Push to a remote first.')
+                            update_log.value = remote_err.decode()
+                        elif local_hash == remote_hash:
+                            update_status.set_text(f'Up to date ({local_hash})')
+                            ui.notify('Already up to date!', type='positive')
+                        else:
+                            update_status.set_text(f'Update available: {local_hash} → {remote_hash}')
+                            ui.notify('Update available!', type='info')
+                    except Exception as e:
+                        update_status.set_text(f'Error: {e}')
+
+                async def handle_offline_upload(e):
+                    """Handle uploaded .tar.gz file for offline update."""
+                    import tempfile
+                    tmp_path = os.path.join(tempfile.gettempdir(), e.name)
+                    with open(tmp_path, 'wb') as f:
+                        f.write(e.content.read())
+                    ui.notify(f'Uploaded {e.name}. Applying update...', type='info')
+                    await run_update_script(tarball_path=tmp_path)
+
+                import asyncio
+                with ui.row().classes('w-full justify-end gap-2 q-mt-md'):
+                    ui.button('Check for Updates', icon='refresh', on_click=check_for_updates).props('flat color=primary')
+                    ui.button('Pull Latest', icon='download', on_click=lambda: run_update_script()).props('color=primary')
+
+                ui.separator().classes('q-my-sm')
+                ui.label('Offline Update').classes('text-xs text-grey-4 font-bold uppercase')
+                ui.upload(on_upload=handle_offline_upload, label='Select update file (.tar.gz)', auto_upload=True).props('accept=".tar.gz,.tgz" flat bordered').classes('w-full')
 
             ui.label("Simulation Mode").classes('text-subtitle1 q-mt-sm font-bold text-grey')
             SimulationToggle(initial_state=settings.get("use_simulation", False))

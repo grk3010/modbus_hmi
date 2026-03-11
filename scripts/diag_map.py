@@ -2,7 +2,7 @@
 CIP attribute probe: discovers what the NQ-EP4L exposes about its Modbus/IO-Link layout.
 Queries Class 0x0304 (IO-Link Port) and other relevant classes for PDI size info.
 """
-import sys, os
+import sys, os, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pycomm3 import CIPDriver, Services
@@ -10,7 +10,22 @@ import struct
 import logging
 logging.getLogger('pycomm3').setLevel(logging.CRITICAL)
 
-MASTER_IP = "172.16.1.171"
+def get_master_ip():
+    """Resolve master IP from CLI arg, hmi_settings.json, or prompt."""
+    if len(sys.argv) > 1:
+        return sys.argv[1]
+    settings_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hmi_settings.json")
+    if os.path.exists(settings_path):
+        try:
+            with open(settings_path) as f:
+                ip = json.load(f).get("master_ip", "")
+                if ip:
+                    return ip
+        except Exception:
+            pass
+    return input("Enter Master IP (e.g. 172.16.1.171): ").strip()
+
+MASTER_IP = get_master_ip()
 
 def probe_port_attributes(master, port, class_code=0x0304):
     """Read all plausible attributes for a port instance."""

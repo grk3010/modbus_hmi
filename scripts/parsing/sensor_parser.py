@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 class SensorParser:
-    def __init__(self, iodd_dir="/home/pi/modbus_hmi/iodd_files"):
+    def __init__(self, iodd_dir="iodd_files"):
         self.iodd_dir = iodd_dir
         self.sensors = {} # {product_id: {variables}}
         self.icons = {} # {product_id: icon_path}

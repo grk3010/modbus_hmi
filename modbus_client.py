@@ -74,6 +74,10 @@ class ModbusClient:
         return (address, length)
         
     async def connect(self):
+        # If the host changed, tear down the old client so a new one is created
+        if self.client is not None and self.client.comm_params.host != self.host:
+            self.client.close()
+            self.client = None
         if self.client is None:
             self.client = AsyncModbusTcpClient(self.host, port=self.port)
         self.connected = await self.client.connect()
@@ -293,11 +297,7 @@ class ModbusClient:
         payload_bytes = b"".join(struct.pack(">H", reg) for reg in swapped_registers)
         total_bits = len(payload_bytes) * 8
 
-        decoded_data = {}
-        for var_name, var_info in sensor_map.items():
-            bit_offset = var_info["bit_offset"]
-            bit_length = var_info["bit_length"]
-            datatype = var_info["datatype"]
+
             
         # Calculate total required payload bits instead of full padded len
         total_payload_bits = max_bit if max_bit > 0 else len(payload_bytes) * 8
@@ -337,17 +337,7 @@ class ModbusClient:
 
         return decoded_data
 
-    def _extract_bits(self, data_bytes, start_bit, bit_length):
-        """Extracts an integer from a byte array given a start bit and length."""
-        # Convert byte array to an integer
-        int_val = int.from_bytes(data_bytes, byteorder='big')
-        # Shift right to eliminate trailing bits
-        total_bits = len(data_bytes) * 8
-        shift_amount = total_bits - (start_bit + bit_length)
-        shifted = int_val >> shift_amount
-        # Mask out leading bits
-        mask = (1 << bit_length) - 1
-        return shifted & mask
+
 
     async def poll_ports(self, hmi_settings, sensor_parser):
         """

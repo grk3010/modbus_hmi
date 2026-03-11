@@ -33,7 +33,7 @@ load_settings()
 
 def save_settings():
     with open(SETTINGS_FILE, "w") as f:
-        json.dump(settings, f)
+        json.dump(settings, f, indent=2, ensure_ascii=False)
     ui.notify("Settings saved!", type="positive")
 
 def get_effective_units(port_num):
