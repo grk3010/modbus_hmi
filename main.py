@@ -137,4 +137,4 @@ if opcua_client:
     app.on_startup(lambda: asyncio.create_task(opcua_client.connect_and_poll()))
 
 if __name__ in {"__main__", "__mp_main__"}:
-    ui.run(port=8080, dark=True, title="Industrial HMI")
+    ui.run(host='0.0.0.0', port=8080, dark=True, title='Industrial HMI')

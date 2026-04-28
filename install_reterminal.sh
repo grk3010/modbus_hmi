@@ -1,107 +1,70 @@
 #!/bin/bash
+# Final Installation Script for CLI-first Kiosk Boot
+# Targets: Raspberry Pi OS (Trixie) on reTerminal CM4
 
-# ==============================================================================
-# Modbus HMI - reTerminal Deployment Script
-# ==============================================================================
-# This script installs dependencies, creates a systemd service, and optionally
-# configures LXDE-pi autostart to boot the reTerminal into Kiosk mode.
-# Run this script with sudo: sudo ./install_reterminal.sh [--no-kiosk]
-# ==============================================================================
+PROJECT_DIR="/home/pi/modbus_hmi"
+ACTUAL_USER="pi"
+USER_HOME="/home/pi"
 
-if [ "$EUID" -ne 0 ]; then
-  echo "Please run this script as root (sudo ./install_reterminal.sh)"
-  exit 1
+echo "Configuring CLI-first Kiosk Boot..."
+
+# 1. Set System to Boot to CLI with Autologin
+sudo raspi-config nonint do_boot_behaviour B2
+
+# 2. Install Dependencies
+sudo apt-get update
+sudo apt-get install -y swaybg curl chromium
+
+# 3. Setup Project Assets
+sudo cp "$PROJECT_DIR/iodd_files/assets/compressor_graphic.png" /usr/share/plymouth/themes/pix/splash.png
+
+# 4. Create Minimal Kiosk Launch Script
+KIOSK_SCRIPT="$USER_HOME/.config/labwc/kiosk-launch.sh"
+sudo -u "$ACTUAL_USER" mkdir -p "$(dirname "$KIOSK_SCRIPT")"
+sudo -u "$ACTUAL_USER" cat << 'EOF_KIOSK' > "$KIOSK_SCRIPT"
+#!/bin/bash
+# Minimal Wayland Kiosk Launch
+exec > /tmp/kiosk.log 2>&1
+echo "Kiosk started at $(date)"
+
+# Force screen rotation to landscape (fixes rotation bug on warm restarts without Plymouth)
+wlr-randr --output DSI-1 --transform 270 || true
+
+swaybg -i /home/pi/modbus_hmi/iodd_files/assets/compressor_graphic.png -m fill &
+
+# Wait for HMI server
+while ! curl -s http://localhost:8080 >/dev/null; do sleep 1; done
+
+# Clean state
+rm -rf /home/pi/.config/chromium/Singleton*
+
+# Launch Chromium
+chromium --kiosk --incognito --noerrdialogs --disable-translate --no-first-run --fast --fast-start --disable-infobars --disable-features=TranslateUI --disk-cache-dir=/tmp/chromium_cache --password-store=basic --ozone-platform=wayland --enable-features=UseOzonePlatform http://localhost:8080
+EOF_KIOSK
+chmod +x "$KIOSK_SCRIPT"
+
+# 5. Update .profile for Login Launch
+PROFILE="$USER_HOME/.profile"
+if ! grep -q "kiosk-launch.sh" "$PROFILE"; then
+  cat << 'EOF_PROFILE' >> "$PROFILE"
+
+# Wayland / Kiosk Launch for CLI-first boot
+if [ -z "$XDG_RUNTIME_DIR" ]; then
+    export XDG_RUNTIME_DIR=/run/user/$(id -u)
 fi
-
-# --- Detect the invoking user and home directory ---
-ACTUAL_USER="${SUDO_USER:-$(logname 2>/dev/null || echo pi)}"
-USER_HOME=$(getent passwd "$ACTUAL_USER" | cut -d: -f6)
-if [ -z "$USER_HOME" ] || [ ! -d "$USER_HOME" ]; then
-  echo "Warning: Could not detect home directory for user '$ACTUAL_USER'. Falling back to /home/$ACTUAL_USER"
-  USER_HOME="/home/$ACTUAL_USER"
-fi
-APP_DIR="$USER_HOME/modbus_hmi"
-
-# --- Parse arguments ---
-ENABLE_KIOSK=true
-for arg in "$@"; do
-  case $arg in
-    --no-kiosk) ENABLE_KIOSK=false ;;
-  esac
-done
-
-echo "========================================="
-echo " Starting Modbus HMI Deployment"
-echo " User:    $ACTUAL_USER"
-echo " Home:    $USER_HOME"
-echo " App Dir: $APP_DIR"
-echo " Kiosk:   $ENABLE_KIOSK"
-echo "========================================="
-
-echo "[1/4] Installing system dependencies..."
-apt-get update
-apt-get install -y python3-venv python3-pip dnsmasq network-manager
-
-echo "[2/4] Setting up Python virtual environment..."
-cd "$APP_DIR" || { echo "App directory not found at $APP_DIR. Exiting."; exit 1; }
-
-sudo -u "$ACTUAL_USER" python3 -m venv venv
-sudo -u "$ACTUAL_USER" ./venv/bin/pip install -r requirements.txt
-
-echo "[3/4] Configuring systemd auto-start service..."
-SERVICE_FILE="/etc/systemd/system/modbus_hmi.service"
-cat <<EOF > "$SERVICE_FILE"
-[Unit]
-Description=Keyence/Atlas Copco Modbus HMI Server
-After=network.target
-
-[Service]
-User=$ACTUAL_USER
-WorkingDirectory=$APP_DIR
-Environment="PATH=$APP_DIR/venv/bin"
-ExecStart=$APP_DIR/venv/bin/python main.py
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable modbus_hmi.service
-systemctl restart modbus_hmi.service
-
-if [ "$ENABLE_KIOSK" = true ]; then
-  echo "[4/4] Configuring Kiosk Mode (Chromium)..."
-  AUTOSTART_FILE="/etc/xdg/lxsession/LXDE-pi/autostart"
-
-  if [ -f "$AUTOSTART_FILE" ]; then
-    # Disable screensaver and power management
-    if ! grep -q "@xset s noblank" "$AUTOSTART_FILE"; then echo "@xset s noblank" >> "$AUTOSTART_FILE"; fi
-    if ! grep -q "@xset s off" "$AUTOSTART_FILE"; then echo "@xset s off" >> "$AUTOSTART_FILE"; fi
-    if ! grep -q "@xset -dpms" "$AUTOSTART_FILE"; then echo "@xset -dpms" >> "$AUTOSTART_FILE"; fi
-    
-    # Comment out xscreensaver if it exists
-    sed -i 's/@xscreensaver -no-splash/#@xscreensaver -no-splash/g' "$AUTOSTART_FILE"
-
-    # Add Chromium kiosk command if not present
-    if ! grep -q "chromium-browser --kiosk" "$AUTOSTART_FILE"; then
-      echo "@chromium-browser --kiosk --incognito --noerrdialogs --disable-translate --no-first-run --fast --fast-start --disable-infobars --disable-features=TranslateUI --disk-cache-dir=/dev/null http://localhost:8080" >> "$AUTOSTART_FILE"
+if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    if [ ! -f "$HOME/.no_kiosk" ]; then
+        exec labwc -s /home/pi/.config/labwc/kiosk-launch.sh
+    else
+        rm "$HOME/.no_kiosk"
+        exec labwc
     fi
-    echo "Kiosk mode configured successfully."
-  else
-    echo "LXDE-pi autostart file not found. If this uses Wayland/Wayfire, manual configuration is required."
-  fi
-else
-  echo "[4/4] Skipping Kiosk Mode (--no-kiosk flag set)."
+fi
+EOF_PROFILE
 fi
 
-echo "========================================="
-echo " Deployment Complete!"
-echo " The HMI server is now running in the background."
-if [ "$ENABLE_KIOSK" = true ]; then
-  echo " A reboot is recommended to verify Kiosk mode: sudo reboot"
-else
-  echo " Dashboard available at: http://localhost:8080"
-fi
-echo "========================================="
+# 6. Ensure HMI Service is Enabled
+sudo systemctl enable modbus_hmi.service
+sudo systemctl restart modbus_hmi.service
+
+echo "Configuration complete. Please REBOOT."

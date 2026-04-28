@@ -129,7 +129,7 @@ def config_page():
                     try:
                         if state:
                             ui.notify(f"Configuring eth0 as DHCP Server ({ip_to_use})...", type="info", timeout=3000)
-                            process = await asyncio.create_subprocess_exec("sudo", "bash", "scripts/enable_local_host.sh", ip_to_use)
+                            process = await asyncio.create_subprocess_exec("sudo", "bash", "/home/pi/modbus_hmi/scripts/enable_local_host.sh", ip_to_use)
                             await process.communicate()
                             if process.returncode == 0:
                                 ui.notify("eth0 configured successfully.", type="positive")
@@ -137,7 +137,7 @@ def config_page():
                                 ui.notify(f"Failed to configure eth0: process returned {process.returncode}", type="negative")
                         else:
                             ui.notify("Reverting eth0 to automatic DHCP client...", type="info", timeout=3000)
-                            process = await asyncio.create_subprocess_exec("sudo", "bash", "scripts/disable_local_host.sh")
+                            process = await asyncio.create_subprocess_exec("sudo", "bash", "/home/pi/modbus_hmi/scripts/disable_local_host.sh")
                             await process.communicate()
                             if process.returncode == 0:
                                 ui.notify("eth0 reverted successfully.", type="positive")
@@ -530,3 +530,90 @@ def config_page():
             remote_ip.on('update:model-value', render_qr.refresh)
             # Render initially
             render_qr()
+
+            ui.separator().classes('w-full q-my-md')
+            ui.label("System Control").classes('text-h6')
+            
+            async def run_chromium(kiosk=False):
+                import os
+                import asyncio
+                user_home = os.path.expanduser("~")
+                
+                # Setup environment for Wayland
+                env = os.environ.copy()
+                env["WAYLAND_DISPLAY"] = "wayland-0"
+                env["XDG_RUNTIME_DIR"] = "/run/user/1000"
+                
+                # Kill existing chromium
+                try:
+                    await asyncio.create_subprocess_exec("pkill", "chromium")
+                    await asyncio.sleep(1) # Wait for cleanup
+                except:
+                    pass
+                
+                # Use real cache dir to avoid Errors
+                chrome_cache = "/tmp/chromium_cache"
+                os.makedirs(chrome_cache, exist_ok=True)
+                
+                # Remove stale SingletonLock/Cookie
+                chrome_config = os.path.expanduser("~/.config/chromium")
+                for f in ["SingletonLock", "SingletonCookie"]:
+                    lock_file = os.path.join(chrome_config, f)
+                    if os.path.exists(lock_file):
+                        try: os.remove(lock_file)
+                        except: pass
+                
+                # Ensure wallpaper is running (swaybg)
+                try:
+                    await asyncio.create_subprocess_exec("pkill", "swaybg")
+                    await asyncio.sleep(0.1)
+                except:
+                    pass
+                wallpaper_path = "/home/pi/modbus_hmi/iodd_files/assets/compressor_graphic.png"
+                await asyncio.create_subprocess_exec("swaybg", "-i", wallpaper_path, "-m", "fill", env=env)
+                
+                cmd = ["chromium", "--incognito", "--noerrdialogs", "--disable-translate", "--no-first-run", 
+                       "--fast", "--fast-start", "--disable-infobars", "--disable-features=TranslateUI", 
+                       f"--disk-cache-dir={chrome_cache}", "--password-store=basic", "--ozone-platform=wayland", 
+                       "--enable-features=UseOzonePlatform", "http://localhost:8080"]
+                
+                if kiosk:
+                    cmd.insert(1, "--kiosk")
+                
+                # Relaunch
+                await asyncio.create_subprocess_exec(*cmd, env=env)
+
+            async def exit_to_desktop():
+                ui.notify("Switching to Full Desktop...", type='info')
+                try:
+                    import os
+                    # Create trigger for .profile to skip kiosk and launch full desktop
+                    no_kiosk_path = "/home/pi/.no_kiosk"
+                    with open(no_kiosk_path, 'w') as f:
+                        f.write('1')
+                    
+                    # Kill current labwc session (minimal kiosk)
+                    # This will trigger a logout/relogin due to CLI autologin
+                    import asyncio
+                    await asyncio.create_subprocess_exec("pkill", "labwc")
+                except Exception as e:
+                    ui.notify(f"Error: {e}", type='negative')
+
+            async def enter_kiosk_mode():
+                ui.notify("Entering Kiosk Mode...", type='info')
+                try:
+                    import os
+                    # Remove trigger to ensure .profile launches kiosk
+                    no_kiosk_path = "/home/pi/.no_kiosk"
+                    if os.path.exists(no_kiosk_path):
+                        os.remove(no_kiosk_path)
+                    
+                    # Kill current labwc session (full desktop)
+                    import asyncio
+                    await asyncio.create_subprocess_exec("pkill", "labwc")
+                except Exception as e:
+                    ui.notify(f"Error: {e}", type='negative')
+
+            with ui.row().classes('w-full gap-2'):
+                ui.button("Exit to Desktop", icon="logout", on_click=exit_to_desktop).props('color=negative').classes('flex-1')
+                ui.button("Start Kiosk Mode", icon="fullscreen", on_click=enter_kiosk_mode).props('color=primary').classes('flex-1')
