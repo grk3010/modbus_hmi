@@ -29,6 +29,47 @@ echo " Modbus HMI Updater"
 echo " Current Version: $CURRENT_VERSION"
 echo "========================================="
 
+# Check if resuming from automated Stage 2 reboot sequence
+IS_STAGE2_RESUME=false
+if [ "$1" = "--stage2-resume" ]; then
+  IS_STAGE2_RESUME=true
+  shift
+fi
+
+# Detect active OverlayFS configuration
+OVERLAY_ACTIVE=false
+if grep -q "overlay / " /proc/mounts 2>/dev/null || grep -q "overlayroot" /proc/mounts 2>/dev/null; then
+  OVERLAY_ACTIVE=true
+fi
+
+if [ "$OVERLAY_ACTIVE" = true ] && [ "$IS_STAGE2_RESUME" = false ]; then
+  echo "=================================================="
+  echo " OverlayFS is currently ACTIVE (Read-Only Root)   "
+  echo " Staging automated two-stage update sequence...   "
+  echo "=================================================="
+  
+  MARKER_FILE="/mnt/ssd/.update_pending"
+  if [ ! -d "/mnt/ssd" ]; then
+    MARKER_FILE="/boot/firmware/.update_pending"
+  fi
+  
+  echo "Dropping persistent update flag at $MARKER_FILE..."
+  sudo touch "$MARKER_FILE"
+  sudo chmod 777 "$MARKER_FILE" || true
+  
+  if [ -n "$1" ]; then
+    echo "$1" > "${MARKER_FILE}_target"
+    sudo chmod 777 "${MARKER_FILE}_target" || true
+  fi
+  
+  echo "Disabling OverlayFS to temporarily unlock base storage..."
+  sudo raspi-config nonint disable_overlayfs
+  
+  echo "Rebooting into writeable staging state..."
+  sudo reboot
+  exit 0
+fi
+
 if [ -n "$1" ]; then
   # --- Offline Update from Tarball ---
   TARBALL="$1"

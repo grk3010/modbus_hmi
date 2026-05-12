@@ -2,7 +2,7 @@ from nicegui import ui, app
 import os
 import time
 from shared_state import settings, save_settings, modbus_client, sensor_parser, IODD_DIR, data_logger
-from components import SimulationToggle, HostNetworkToggle, KeyboardInput, NumberInput, IPAddressInput
+from components import SimulationToggle, HostNetworkToggle, KeyboardInput, NumberInput, IPAddressInput, StorageLocationInput
 
 @ui.page('/config')
 def config_page():
@@ -354,6 +354,34 @@ def config_page():
                 ui.checkbox("Enable Local Logging").bind_value(settings, "enable_logging").on('update:model-value', save_settings)
                 ui.number("Logging Interval (s)", value=10.0, format="%.1f").bind_value(settings, "logging_interval").on('update:model-value', save_settings)
                 ui.number("Data Retention (days)", value=7.0, format="%.1f").bind_value(settings, "data_retention_days").on('update:model-value', save_settings)
+
+                db_path_input = StorageLocationInput(label="Database Storage Directory", placeholder="Click to browse folders...", value=settings.get("db_storage_path", "")).classes('w-full q-mt-sm')
+                
+                def on_db_path_change(e=None):
+                    new_path = db_path_input.value.strip() if db_path_input.value else ""
+                    old_path = settings.get("db_storage_path", "")
+                    if new_path == old_path:
+                        return
+                        
+                    settings["db_storage_path"] = new_path
+                    save_settings()
+                    
+                    with ui.dialog() as dialog, ui.card():
+                        ui.label("Database Location Updated").classes('text-h6 font-bold')
+                        ui.label(f"Target directory: {new_path if new_path else 'Default (./)'}").classes('text-sm text-grey-4 q-mb-md')
+                        ui.label("Would you like to move your existing historical database records to the new location to preserve past charts?").classes('text-sm')
+                        
+                        with ui.row().classes('w-full justify-end q-mt-md gap-2'):
+                            def do_migrate(should_migrate):
+                                data_logger.update_db_path(new_path, migrate=should_migrate)
+                                ui.notify("Database path applied successfully.", type="positive")
+                                dialog.close()
+                                
+                            ui.button("No, start fresh", on_click=lambda: do_migrate(False)).props('flat color=warning')
+                            ui.button("Yes, move data", on_click=lambda: do_migrate(True)).props('color=primary')
+                    dialog.open()
+                    
+                db_path_input.on_value_change(on_db_path_change)
 
                 def confirm_reset():
                     with ui.dialog() as dialog, ui.card():

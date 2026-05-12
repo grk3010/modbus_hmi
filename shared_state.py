@@ -28,6 +28,11 @@ def load_settings():
                 settings.update(loaded)
         except Exception as e:
             print(f"Error loading settings: {e}")
+            
+    # Apply configured database storage path dynamically
+    db_path = settings.get("db_storage_path", "")
+    if db_path:
+        data_logger.update_db_path(db_path, migrate=False)
 
 load_settings()
 

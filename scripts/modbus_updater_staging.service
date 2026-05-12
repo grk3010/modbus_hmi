@@ -1,0 +1,13 @@
+[Unit]
+Description=Modbus HMI Automated OverlayFS Update Staging Service
+After=network.target local-fs.target
+Before=modbus_hmi.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /home/pi/modbus_hmi/scripts/check_staged_update.sh
+RemainAfterExit=yes
+User=root
+
+[Install]
+WantedBy=multi-user.target

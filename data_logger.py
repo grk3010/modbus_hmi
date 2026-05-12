@@ -2,6 +2,8 @@ import sqlite3
 import json
 import logging
 import asyncio
+import os
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +11,49 @@ class DataLogger:
     def __init__(self, db_path="sensor_data.db"):
         self.db_path = db_path
         self._init_db()
+
+    def update_db_path(self, storage_dir, migrate=False):
+        """Updates the database file location dynamically and optionally migrates historical data."""
+        if not storage_dir or storage_dir.strip() in ["", ".", "./"]:
+            new_path = "sensor_data.db"
+        else:
+            os.makedirs(storage_dir, exist_ok=True)
+            new_path = os.path.join(storage_dir, "sensor_data.db")
+            
+        old_path = self.db_path
+        if old_path == new_path:
+            return True
+
+        logger.info(f"Switching database path from {old_path} to {new_path}")
+        
+        if migrate and os.path.exists(old_path):
+            try:
+                if os.path.exists(new_path):
+                    logger.warning(f"Target DB {new_path} already exists. Backing it up.")
+                    shutil.copy2(new_path, new_path + ".bak")
+                    
+                shutil.copy2(old_path, new_path)
+                logger.info("Successfully copied database records to new location.")
+                
+                # Test connection to copied DB
+                with sqlite3.connect(new_path) as test_conn:
+                    test_conn.execute("SELECT count(*) FROM sensor_logs")
+                
+                try:
+                    os.remove(old_path)
+                    logger.info(f"Removed old database file: {old_path}")
+                except Exception as del_e:
+                    logger.warning(f"Could not remove old DB file: {del_e}")
+                    
+            except Exception as e:
+                logger.error(f"Migration failed: {e}. Reinitializing clean DB at target.")
+                
+        self.db_path = new_path
+        self._init_db()
+        return True
+
+    async def update_db_path_async(self, storage_dir, migrate=False):
+        return await asyncio.to_thread(self.update_db_path, storage_dir, migrate)
 
     def _init_db(self):
         try:

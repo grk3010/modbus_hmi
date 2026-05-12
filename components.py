@@ -1,4 +1,6 @@
 import asyncio
+import os
+import subprocess
 from nicegui import ui
 from shared_state import settings, save_settings
 
@@ -404,3 +406,145 @@ class GaugeSettingsDialog(ui.dialog):
                             on_save()
                         self.close()
                     ui.button("Save Changes", on_click=save).props('color=indigo text-white').classes('px-6')
+
+class StorageBrowserDialog(ui.dialog):
+    def __init__(self, initial_dir='/mnt', on_select=None):
+        super().__init__()
+        self.on_select = on_select
+        if not initial_dir or not os.path.exists(initial_dir):
+            self.current_dir = os.path.abspath('/')
+        else:
+            self.current_dir = os.path.abspath(initial_dir)
+            
+        with self, ui.card().classes('w-[700px] max-w-[95vw] bg-[#1a1c1e] text-white border-2 border-primary shadow-2xl q-pa-md'):
+            with ui.row().classes('w-full items-center justify-between q-mb-sm'):
+                ui.label("Select Storage Directory").classes('text-h6 font-bold text-primary')
+                ui.button(icon='close', on_click=self.close).props('flat round size=sm text-grey')
+                
+            self.path_lbl = ui.label(self.current_dir).classes('font-mono text-sm bg-black/40 q-pa-sm rounded border border-gray-700 w-full truncate q-mb-md')
+            self.list_container = ui.column().classes('w-full h-64 overflow-y-auto bg-black/20 rounded border border-gray-800 q-pa-xs gap-1')
+            
+            with ui.row().classes('w-full justify-between items-center q-mt-md'):
+                ui.button("New Folder", icon="create_new_folder", on_click=self._new_folder).props('flat color=info size=sm')
+                ui.button("Select Current Directory", icon="check_circle", on_click=self._confirm).props('color=primary text-white')
+
+            ui.separator().classes('w-full q-my-md bg-gray-700')
+            
+            with ui.expansion("Format & Mount Hardware SSD", icon="save").classes('w-full bg-black/30 rounded border border-gray-800'):
+                ui.label("Discovers available internal block devices. Formatting mounts volume directly to /mnt/ssd.").classes('text-xs text-grey-4 q-mb-sm')
+                self.drive_select = ui.select({}, label="Target Hardware Volume").classes('w-full q-mb-sm')
+                self.format_btn = ui.button("Format & Mount Drive", color="red", icon="warning", on_click=self._format_drive).classes('w-full').props('dense')
+                
+            self._refresh()
+
+    def _refresh(self):
+        self.path_lbl.set_text(self.current_dir)
+        self.list_container.clear()
+        
+        drives = {}
+        try:
+            out = subprocess.check_output("lsblk -d -o NAME,SIZE,MODEL,TYPE", shell=True).decode()
+            for line in out.split("\n"):
+                if not line or "NAME" in line: continue
+                parts = line.split()
+                if len(parts) >= 3 and "disk" in line:
+                    name = parts[0]
+                    size = parts[1]
+                    model = " ".join(parts[2:-1]) if len(parts) > 3 else parts[2]
+                    if name.startswith("nvme") or name.startswith("sd"):
+                        drives[name] = f"/dev/{name} - {size} ({model})"
+        except Exception:
+            pass
+            
+        self.drive_select.options = drives
+        self.drive_select.update()
+        if drives and not self.drive_select.value:
+            self.drive_select.value = list(drives.keys())[0]
+
+        with self.list_container:
+            parent = os.path.dirname(self.current_dir)
+            if parent != self.current_dir:
+                with ui.row().classes('w-full items-center justify-between q-pa-xs hover:bg-white/10 rounded cursor-pointer no-wrap').on('click', lambda: self._nav(parent)):
+                    with ui.row().classes('items-center gap-2'):
+                        ui.icon('folder_open', size='sm').classes('text-amber')
+                        ui.label(".. (Parent Directory)").classes('text-xs font-bold text-grey-3')
+            
+            try:
+                items = sorted(os.listdir(self.current_dir))
+                for item in items:
+                    full_path = os.path.join(self.current_dir, item)
+                    if os.path.isdir(full_path):
+                        with ui.row().classes('w-full items-center justify-between q-pa-xs hover:bg-white/10 rounded cursor-pointer no-wrap').on('click', lambda p=full_path: self._nav(p)):
+                            with ui.row().classes('items-center gap-2 truncate'):
+                                ui.icon('folder', size='sm').classes('text-amber')
+                                ui.label(item).classes('text-xs text-white truncate')
+            except Exception as e:
+                ui.label(f"Access Denied: {e}").classes('text-xs text-red q-pa-sm')
+
+    def _nav(self, path):
+        self.current_dir = os.path.abspath(path)
+        self._refresh()
+
+    def _confirm(self):
+        if self.on_select:
+            self.on_select(self.current_dir)
+        self.close()
+
+    def _new_folder(self):
+        def save_folder(name):
+            if not name: return
+            target = os.path.join(self.current_dir, name.strip())
+            try:
+                os.makedirs(target, exist_ok=True)
+                ui.notify(f"Created folder {name}", type="positive")
+                self._nav(target)
+            except Exception as e:
+                ui.notify(f"Error creating folder: {e}", type="negative")
+                
+        KeyboardDialog("New Folder Name", initial_value="", on_save=save_folder).open()
+
+    async def _format_drive(self):
+        dev = self.drive_select.value
+        if not dev:
+            ui.notify("No drive selected", type="warning")
+            return
+            
+        with ui.dialog() as confirm_dlg, ui.card().classes('bg-dark border border-red-500'):
+            ui.label(f"WARNING: Formatting /dev/{dev} will PERMANENTLY ERASE all contents!").classes('text-red font-bold')
+            with ui.row().classes('w-full justify-end q-mt-md gap-2'):
+                ui.button("Cancel", on_click=confirm_dlg.close).props('flat')
+                async def do_format():
+                    confirm_dlg.close()
+                    self.format_btn.props('loading')
+                    ui.notify(f"Formatting /dev/{dev} and mounting to /mnt/ssd...", type="info", timeout=5000)
+                    try:
+                        proc = await asyncio.create_subprocess_exec("sudo", "bash", "/home/pi/modbus_hmi/scripts/setup_ssd.sh", dev, "--force")
+                        await proc.communicate()
+                        if proc.returncode == 0:
+                            ui.notify("SSD successfully formatted and mounted to /mnt/ssd!", type="positive")
+                            self._nav("/mnt/ssd")
+                            self._confirm()
+                        else:
+                            ui.notify("Formatting failed. Verify root privileges or drive state.", type="negative")
+                    except Exception as e:
+                        ui.notify(f"Execution error: {e}", type="negative")
+                    finally:
+                        self.format_btn.props(remove='loading')
+                ui.button("Erase & Mount", color="red", on_click=do_format)
+        confirm_dlg.open()
+
+class StorageLocationInput(ui.input):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.on('click', self._open_browser)
+        self.props('readonly cursor-pointer outlined')
+        
+    def _open_browser(self):
+        StorageBrowserDialog(initial_dir=self.value or "/mnt", on_select=self._update_val).open()
+        
+    def _update_val(self, new_dir):
+        self.value = new_dir
+        self.update()
+        # Trigger any bound value change event listener manually if bound to change or blur
+        # NiceGUI fires change events when self.value changes via UI interactions
+        self._handle_value_change(new_dir)

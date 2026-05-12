@@ -87,4 +87,10 @@ fi
 sudo systemctl enable watchdog
 sudo systemctl start watchdog
 
+# 9. Setup Automated Update Staging Service
+echo "Configuring Automated OverlayFS Update Staging Service..."
+sudo cp "$PROJECT_DIR/scripts/modbus_updater_staging.service" /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable modbus_updater_staging.service
+
 echo "Configuration complete. Please REBOOT."
