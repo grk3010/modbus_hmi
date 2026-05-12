@@ -34,3 +34,14 @@ hmi_settings.json
 *.sqlite3
 sensor_data.db
 
+# NiceGUI Session Cache
+.nicegui/
+
+# Local Deployment Scripts & Staging Flags
+scripts/setup_ssd.sh
+scripts/check_staged_update.sh
+scripts/modbus_updater_staging.service
+update_staging.log
+*.log
+.update_pending*
+
