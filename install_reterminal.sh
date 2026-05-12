@@ -67,4 +67,24 @@ fi
 sudo systemctl enable modbus_hmi.service
 sudo systemctl restart modbus_hmi.service
 
+# 7. Setup UPS Shutdown Service
+sudo cp "$PROJECT_DIR/scripts/ups_shutdown.service" /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable ups_shutdown.service
+sudo systemctl restart ups_shutdown.service
+
+# 8. Configure Hardware Watchdog
+echo "Configuring Hardware Watchdog..."
+sudo apt-get install -y watchdog
+if ! grep -q "dtparam=watchdog=on" /boot/firmware/config.txt; then
+    echo "dtparam=watchdog=on" | sudo tee -a /boot/firmware/config.txt
+fi
+sudo sed -i 's/#watchdog-device/watchdog-device/g' /etc/watchdog.conf
+sudo sed -i 's/#watchdog-timeout/watchdog-timeout/g' /etc/watchdog.conf
+if ! grep -q "watchdog-timeout = 15" /etc/watchdog.conf; then
+    sudo sed -i 's/watchdog-timeout.*/watchdog-timeout = 15/g' /etc/watchdog.conf
+fi
+sudo systemctl enable watchdog
+sudo systemctl start watchdog
+
 echo "Configuration complete. Please REBOOT."

@@ -9,7 +9,7 @@ class KeyboardDialog(ui.dialog):
         self.on_save = on_save
         self.caps = False
         
-        with self, ui.card().classes('w-[600px] bg-[#1a1c1e] text-white border-2 border-primary shadow-2xl'):
+        with self, ui.card().classes('w-[850px] max-w-[95vw] bg-[#1a1c1e] text-white border-2 border-primary shadow-2xl'):
             ui.label(title).classes('text-h6 font-bold text-primary q-mb-sm')
             self.display = ui.input(value=self.input_data).props('dark outlined readonly fill-mask').classes('w-full text-h5 q-mb-md')
             
@@ -126,7 +126,7 @@ class KeyboardInput(ui.input):
         self.props('readonly cursor-pointer') # Prevent native keyboard on HMI
 
     def _open_keyboard(self):
-        KeyboardDialog(self.label or "Enter Text", initial_value=self.value, on_save=self._update_val).open()
+        KeyboardDialog(self._props.get('label') or "Enter Text", initial_value=self.value, on_save=self._update_val).open()
     
     def _update_val(self, new_val):
         self.value = new_val
@@ -138,7 +138,7 @@ class NumberInput(ui.number):
         self.props('readonly cursor-pointer')
 
     def _open_numpad(self):
-        NumpadDialog(self.label or "Enter Value", initial_value=self.value or 0, on_save=self._update_val).open()
+        NumpadDialog(self._props.get('label') or "Enter Value", initial_value=self.value or 0, on_save=self._update_val).open()
 
     def _update_val(self, new_val):
         self.value = new_val
@@ -200,7 +200,7 @@ class IPAddressInput(ui.input):
         self.props('readonly cursor-pointer')
 
     def _open_numpad(self):
-        IPNumpadDialog(self.label or 'Enter IP Address', initial_value=self.value or '', on_save=self._update_val).open()
+        IPNumpadDialog(self._props.get('label') or 'Enter IP Address', initial_value=self.value or '', on_save=self._update_val).open()
 
     def _update_val(self, new_val):
         self.value = new_val

@@ -1,0 +1,14 @@
+[Unit]
+Description=UPS Safe Shutdown Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/modbus_hmi/scripts
+ExecStart=/usr/bin/env python3 /home/pi/modbus_hmi/scripts/ups_monitor.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

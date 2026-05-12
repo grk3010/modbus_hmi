@@ -1,14 +1,37 @@
-from nicegui import ui
+from nicegui import ui, app
 import os
+import time
 from shared_state import settings, save_settings, modbus_client, sensor_parser, IODD_DIR, data_logger
 from components import SimulationToggle, HostNetworkToggle, KeyboardInput, NumberInput, IPAddressInput
 
 @ui.page('/config')
 def config_page():
+    if app.storage.user.get('authenticated_until', 0) < time.time():
+        with ui.column().classes('w-full h-screen items-center justify-center q-pa-xl bg-[#121212]'):
+            ui.label('Configuration Access').classes('text-h4 font-bold text-white q-mb-md')
+            password_input = KeyboardInput(label='Password', password=True).classes('w-64').props('dark outlined')
+            
+            def check_password():
+                if password_input.value == settings.get('config_password', 'admin'):
+                    app.storage.user['authenticated_until'] = time.time() + 1800  # 30 mins
+                    ui.navigate.to('/config')
+                else:
+                    ui.notify('Incorrect password', type='negative')
+                    password_input.value = ''
+            
+            ui.button('Login', icon='login', on_click=check_password).props('color="primary"').classes('q-mt-md w-64')
+        return
+
     with ui.header().classes('bg-dark text-white items-center q-pa-md shadow-2'):
         ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/')).props('flat')
         ui.label('Configuration').classes('text-h5 font-bold')
         ui.space()
+        
+        def logout():
+            app.storage.user['authenticated_until'] = 0
+            ui.navigate.to('/')
+            
+        ui.button('Logout', icon='logout', on_click=logout).props('color="negative" flat').classes('q-mr-sm')
         ui.button('Save', icon='save', on_click=save_settings).props('color="primary"')
 
     available_sensors = [""] + sensor_parser.get_available_sensors()
@@ -304,6 +327,10 @@ def config_page():
             
         with ui.column().classes('w-full md:w-1/3 dashboard-card items-center'):
             ui.label("System Settings").classes('text-h6')
+
+            with ui.expansion('Security Settings', icon='security').classes('w-full bg-dark rounded q-my-sm'):
+                pw_input = KeyboardInput(label="Config Password", password=True, value=settings.get('config_password', 'admin')).classes('w-full')
+                pw_input.bind_value(settings, 'config_password').on('update:model-value', save_settings)
 
             with ui.expansion('Dashboard Slot Mapping', icon='dashboard').classes('w-full bg-dark rounded q-my-sm'):
                 ui.label("Manually assign physical ports to dashboard locations:").classes('text-xs text-grey-4 mb-2')

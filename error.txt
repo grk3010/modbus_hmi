@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/pi/modbus_hmi/pages/config.py", line 10, in config_page
+    if app.storage.user.get('authenticated_until', 0) < time.time():
+       ^^^^^^^^^^^^^^^^
+  File "/home/pi/modbus_hmi/venv/lib/python3.13/site-packages/nicegui/storage.py", line 118, in user
+    raise RuntimeError('app.storage.user needs a storage_secret passed in ui.run()')
+RuntimeError: app.storage.user needs a storage_secret passed in ui.run()
