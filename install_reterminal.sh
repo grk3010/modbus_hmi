@@ -37,9 +37,12 @@ while ! curl -s http://localhost:8080 >/dev/null; do sleep 1; done
 
 # Clean state
 rm -rf /home/pi/.config/chromium/Singleton*
+rm -rf /home/pi/.config/chromium/Default/Sessions
+rm -rf /home/pi/.config/chromium/Sessions
+sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/g' /home/pi/.config/chromium/Default/Preferences 2>/dev/null || true
 
 # Launch Chromium
-chromium --kiosk --incognito --noerrdialogs --disable-translate --no-first-run --fast --fast-start --disable-infobars --disable-features=TranslateUI --disk-cache-dir=/tmp/chromium_cache --password-store=basic --ozone-platform=wayland --enable-features=UseOzonePlatform http://localhost:8080
+chromium --kiosk --incognito --noerrdialogs --disable-translate --no-first-run --fast --fast-start --disable-infobars --disable-session-crashed-bubble --hide-crash-restore-bubble --disable-features=TranslateUI --disk-cache-dir=/tmp/chromium_cache --password-store=basic --ozone-platform=wayland --enable-features=UseOzonePlatform http://localhost:8080
 EOF_KIOSK
 chmod +x "$KIOSK_SCRIPT"
 
