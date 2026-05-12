@@ -134,6 +134,25 @@ fi
 echo "Installing/updating dependencies..."
 "./$VENV_DIR/bin/pip" install -r requirements.txt --quiet 2>&1
 
+# Update auxiliary systemd services if installed
+if [ -f "/etc/systemd/system/ups_shutdown.service" ]; then
+  echo "Updating ups_shutdown.service..."
+  sudo cp scripts/ups_shutdown.service /etc/systemd/system/
+fi
+
+if [ -f "/etc/systemd/system/modbus_updater_staging.service" ]; then
+  echo "Updating modbus_updater_staging.service..."
+  sudo cp scripts/modbus_updater_staging.service /etc/systemd/system/
+fi
+
+echo "Reloading systemd daemon..."
+sudo systemctl daemon-reload || true
+
+if systemctl is-active --quiet ups_shutdown.service 2>/dev/null; then
+  echo "Restarting ups_shutdown.service..."
+  sudo systemctl restart ups_shutdown.service
+fi
+
 NEW_VERSION=$(cat VERSION 2>/dev/null || echo "unknown")
 echo "========================================="
 echo " Update Complete!"
@@ -146,3 +165,4 @@ if systemctl is-active --quiet modbus_hmi 2>/dev/null; then
   sudo systemctl restart modbus_hmi
   echo "Service restarted."
 fi
+
