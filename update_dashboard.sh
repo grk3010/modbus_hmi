@@ -119,13 +119,13 @@ else
     exit 0
   fi
 
-  echo "Pulling latest changes..."
-  git pull --ff-only 2>&1
+  echo "Overwriting local changes and syncing with remote repository..."
+  git reset --hard @{u} 2>&1
+  git clean -fd 2>&1
   PULL_STATUS=$?
 
   if [ $PULL_STATUS -ne 0 ]; then
-    echo "Error: git pull failed. You may have local changes."
-    echo "Try: git stash && git pull && git stash pop"
+    echo "Error: Failed to sync with remote tracking branch."
     exit 1
   fi
 fi
