@@ -3,6 +3,9 @@ import os
 import time
 from shared_state import settings, save_settings, modbus_client, sensor_parser, IODD_DIR, data_logger
 from components import SimulationToggle, HostNetworkToggle, KeyboardInput, NumberInput, IPAddressInput, StorageLocationInput
+from utils import generate_qr_svg
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 @ui.page('/config')
 def config_page():
@@ -152,7 +155,8 @@ def config_page():
                     try:
                         if state:
                             ui.notify(f"Configuring eth0 as DHCP Server ({ip_to_use})...", type="info", timeout=3000)
-                            process = await asyncio.create_subprocess_exec("sudo", "bash", "/home/pi/modbus_hmi/scripts/enable_local_host.sh", ip_to_use)
+                            script_path = os.path.join(PROJECT_ROOT, "scripts", "enable_local_host.sh")
+                            process = await asyncio.create_subprocess_exec("sudo", "bash", script_path, ip_to_use)
                             await process.communicate()
                             if process.returncode == 0:
                                 ui.notify("eth0 configured successfully.", type="positive")
@@ -160,7 +164,8 @@ def config_page():
                                 ui.notify(f"Failed to configure eth0: process returned {process.returncode}", type="negative")
                         else:
                             ui.notify("Reverting eth0 to automatic DHCP client...", type="info", timeout=3000)
-                            process = await asyncio.create_subprocess_exec("sudo", "bash", "/home/pi/modbus_hmi/scripts/disable_local_host.sh")
+                            script_path = os.path.join(PROJECT_ROOT, "scripts", "disable_local_host.sh")
+                            process = await asyncio.create_subprocess_exec("sudo", "bash", script_path)
                             await process.communicate()
                             if process.returncode == 0:
                                 ui.notify("eth0 reverted successfully.", type="positive")
@@ -579,8 +584,10 @@ def config_page():
             @ui.refreshable
             def render_qr():
                 current_ip = remote_ip.value
-                ui.html(f'<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://{current_ip}:8080" />', sanitize=False)
-                ui.label(f"http://{current_ip}:8080").classes('text-subtitle1 text-grey font-mono q-mt-sm')
+                url_target = f"http://{current_ip}:8080"
+                qr_svg = generate_qr_svg(url_target, size=150)
+                ui.html(qr_svg, sanitize=False)
+                ui.label(url_target).classes('text-subtitle1 text-grey font-mono q-mt-sm')
 
             remote_ip.on('update:model-value', render_qr.refresh)
             # Render initially
@@ -624,7 +631,7 @@ def config_page():
                     await asyncio.sleep(0.1)
                 except:
                     pass
-                wallpaper_path = "/home/pi/modbus_hmi/iodd_files/assets/compressor_graphic.png"
+                wallpaper_path = os.path.join(PROJECT_ROOT, "iodd_files", "assets", "compressor_graphic.png")
                 await asyncio.create_subprocess_exec("swaybg", "-i", wallpaper_path, "-m", "fill", env=env)
                 
                 cmd = ["chromium", "--incognito", "--noerrdialogs", "--disable-translate", "--no-first-run", 

@@ -37,6 +37,9 @@ class ModbusClient:
         self.byte_swap = False
         self.word_swap = False
 
+        # Performance cache for sensor layouts
+        self._layout_cache = {}
+
     @staticmethod
     def get_modbus_layout(master_type, port_num, sensor_map=None):
         """
@@ -263,87 +266,75 @@ class ModbusClient:
     def decode_payload(self, raw_registers, sensor_map):
         """
         Decodes a list of 16-bit registers returned by Modbus into sensor values
-        based on the IODD sensor_map dictionary.
-        
-        Args:
-            raw_registers: list of integers (the holding registers)
-            sensor_map: dict of mapped variables from SensorParser
+        based on the IODD sensor_map dictionary with layout caching for CM4 efficiency.
         """
         if not raw_registers or not sensor_map:
             return {}
 
-        # Pad registers to match the sensor's maximum bit offset map
-        max_bit = max([v["bit_offset"] + v["bit_length"] for v in sensor_map.values()]) if sensor_map else 0
-        expected_words = (max_bit + 15) // 16
+        # Retrieve or compute pre-compiled layout metadata
+        map_id = id(sensor_map)
+        layout_meta = self._layout_cache.get(map_id)
+        if layout_meta is None:
+            max_bit = max([v["bit_offset"] + v["bit_length"] for v in sensor_map.values()]) if sensor_map else 0
+            expected_words = (max_bit + 15) // 16
+            byte_len = (max_bit + 7) // 8
+            # Pre-compile variable decoding parameters
+            compiled_vars = []
+            for var_name, var_info in sensor_map.items():
+                bit_offset = var_info["bit_offset"]
+                bit_length = var_info["bit_length"]
+                mask = (1 << bit_length) - 1
+                is_signed = var_info.get("datatype") == "IntegerT"
+                compiled_vars.append((var_name, bit_offset, bit_length, mask, is_signed))
+            layout_meta = (expected_words, byte_len, compiled_vars)
+            self._layout_cache[map_id] = layout_meta
+
+        expected_words, byte_len, compiled_vars = layout_meta
+
         padded_registers = list(raw_registers)
         if len(padded_registers) < expected_words:
             padded_registers.extend([0] * (expected_words - len(padded_registers)))
 
         # Apply byte/word swaps if configured
-        swapped_registers = []
-        for reg in padded_registers:
-            val = reg
-            if self.byte_swap:
-                val = ((val << 8) & 0xFF00) | ((val >> 8) & 0x00FF)
-            swapped_registers.append(val)
-        
-        if self.word_swap:
-            # Swap adjacent 16-bit words (typical for 32-bit values)
-            for i in range(0, len(swapped_registers) - 1, 2):
-                swapped_registers[i], swapped_registers[i+1] = swapped_registers[i+1], swapped_registers[i]
+        if self.byte_swap or self.word_swap:
+            swapped_registers = []
+            for reg in padded_registers:
+                val = reg
+                if self.byte_swap:
+                    val = ((val << 8) & 0xFF00) | ((val >> 8) & 0x00FF)
+                swapped_registers.append(val)
+            
+            if self.word_swap:
+                for i in range(0, len(swapped_registers) - 1, 2):
+                    swapped_registers[i], swapped_registers[i+1] = swapped_registers[i+1], swapped_registers[i]
+        else:
+            swapped_registers = padded_registers
 
-        # Convert registers to a single byte stream, assuming Big Endian for Modbus TCP
-        # pymodbus returns registers as ints, we pack them into bytes
         payload_bytes = b"".join(struct.pack(">H", reg) for reg in swapped_registers)
-        total_bits = len(payload_bytes) * 8
-
-
-            
-        # Calculate total required payload bits instead of full padded len
-        total_payload_bits = max_bit if max_bit > 0 else len(payload_bytes) * 8
-        
-        # IO-Link transmits bit N first and bit 0 last. 
-        # Modbus maps the first received word to the first register.
-        # This means the highest bit index (e.g. 191) is in the first byte.
-        # So we crop payload_bytes to just the actual payload size
-        byte_len = (total_payload_bits + 7) // 8
-        actual_payload_bytes = payload_bytes[:byte_len]
-        
-        # Convert bytes to a single massive integer for easy bit shifting
+        actual_payload_bytes = payload_bytes[:byte_len] if byte_len > 0 else payload_bytes
         payload_int = int.from_bytes(actual_payload_bytes, byteorder='big')
-        
+
         decoded_data = {}
-        for var_name, var_info in sensor_map.items():
-            bit_offset = var_info["bit_offset"]
-            bit_length = var_info["bit_length"]
-            datatype = var_info["datatype"]
-            
-            # Shift down to make this variable the LSB
+        for var_name, bit_offset, bit_length, mask, is_signed in compiled_vars:
             shifted = payload_int >> bit_offset
-            
-            # Mask out the length
-            mask = (1 << bit_length) - 1
             raw_val = shifted & mask
-            
-            # Handle signed integers
-            if datatype == "IntegerT":
-                # If the MSB is 1, it's negative
-                if raw_val & (1 << (bit_length - 1)):
-                    raw_val -= (1 << bit_length)
-            
-            # For this MVP, we won't apply complex Gradients/Offsets, we just return raw.
-            # Real applications would multiply by Gradient and add Offset defined in XML.
+            if is_signed and (raw_val & (1 << (bit_length - 1))):
+                raw_val -= (1 << bit_length)
             decoded_data[var_name] = raw_val
 
         return decoded_data
-
-
 
     async def poll_ports(self, hmi_settings, sensor_parser):
         """
         Continuously polls ports that are configured in hmi_settings.
         """
         while True:
+            is_sim = hmi_settings.get("use_simulation", False)
+            if is_sim:
+                self.master_online = True
+                await asyncio.sleep(1.0)
+                continue
+
             target_ip = hmi_settings.get("master_ip", "127.0.0.1")
             
             if not self.connected or self.host != target_ip:
@@ -391,8 +382,18 @@ class ModbusClient:
                 except Exception as e:
                     self.port_status[port_num] = False
                     logger.error(f"Exception polling port {port_num}: {e}")
-                    # If this throws, maybe disconnected? Let loop handle reconnect
+                    # Socket failure: disconnect cleanly and break out immediately
                     self.connected = False
+                    self.master_online = False
+                    if self.client:
+                        try:
+                            self.client.close()
+                        except Exception:
+                            pass
+                        self.client = None
+                    for remaining_p in range(port_num + 1, 9):
+                        self.port_status[remaining_p] = False
+                    break
 
             # Polling delay
             await asyncio.sleep(0.5)

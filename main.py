@@ -81,6 +81,7 @@ async def data_logging_loop():
             if interval < 1.0: interval = 1.0
 
             if is_enabled:
+                batch_to_log = []
                 for port_str, product_id in settings.items():
                     if not port_str.isdigit() or not product_id:
                         continue
@@ -109,7 +110,10 @@ async def data_logging_loop():
                             data_to_log = modbus_client.port_data.get(port_num, {})
 
                     if data_to_log:
-                        await data_logger.log_data_async(port_num, product_id, data_to_log)
+                        batch_to_log.append((port_num, product_id, data_to_log))
+
+                if batch_to_log:
+                    await data_logger.log_batch_async(batch_to_log)
                         
             await asyncio.sleep(interval)
         except Exception as e:

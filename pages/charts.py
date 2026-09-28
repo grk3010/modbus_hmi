@@ -27,6 +27,8 @@ def charts_page():
                         pass
                 with end_date_input.add_slot('append'):
                     ui.icon('event').on('click', end_menu.open).classes('cursor-pointer text-grey-4')
+
+            refresh_btn = ui.button(icon='refresh', on_click=lambda: fetch_and_render()).props('flat round size=sm color=primary').tooltip('Refresh Chart')
         ui.space()
         # Logging status notification (right side of title bar)
         if not settings.get("enable_logging", False):
@@ -252,10 +254,10 @@ def charts_page():
             # Format for ECharts
             series_list = list(series_dict.values())
             
-            # Tier-2 Protection: Ensure no individual series array exceeds Starlette WebSocket payload limits
+            # Tier-2 Protection: Ensure no individual series array exceeds CM4 display resolution (1280x800)
             for s in series_list:
-                if 'data' in s and len(s['data']) > 800:
-                    step_s = max(1, len(s['data']) // 800)
+                if 'data' in s and len(s['data']) > 350:
+                    step_s = max(1, len(s['data']) // 350)
                     s['data'] = s['data'][::step_s]
                     
             if event_series_data:
@@ -330,9 +332,21 @@ def charts_page():
                         ui.label("No event notices logged in this time window.").classes('text-xs text-grey-5')
 
         hours_select.on_value_change(fetch_and_render)
-        start_date_input.on('update:model-value', lambda: setattr(hours_select, 'value', 0) or fetch_and_render())
-        end_date_input.on('update:model-value', lambda: setattr(hours_select, 'value', 0) or fetch_and_render())
+
+        def on_custom_date_picked():
+            if hours_select.value != 0:
+                hours_select.value = 0  # This automatically triggers fetch_and_render
+            else:
+                ui.timer(0.05, fetch_and_render, once=True)
+
+        start_date_input.on('update:model-value', on_custom_date_picked)
+        end_date_input.on('update:model-value', on_custom_date_picked)
         
         ui.timer(0.1, fetch_and_render, once=True)
-        # Refresh chart every 10 seconds while on page
-        ui.timer(10.0, fetch_and_render)
+
+        # Refresh chart automatically only when on the 1-hour window (15s interval) to save CM4 CPU
+        async def auto_refresh_tick():
+            if hours_select.value == 1:
+                await fetch_and_render()
+
+        ui.timer(15.0, auto_refresh_tick)

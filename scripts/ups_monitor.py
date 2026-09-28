@@ -26,20 +26,22 @@ logging.info(f"POWER FAIL State: Pin goes LOW (0)")
 # Logic: pull_up=True ensures the pin is 1 unless the UPS pulls it to ground (0)
 ups_pin = DigitalInputDevice(DI_PIN, pull_up=PULL_UP)
 
-def recovery_reboot():
-    logging.critical("Initiating safe reboot cycle now!")
-    # CRITICAL: Flush filesystem buffers to protect your compressor logs/configs
+def safe_poweroff():
+    logging.critical("Initiating safe poweroff sequence!")
+    # CRITICAL: Flush filesystem buffers to protect compressor logs/configs
     os.system("sync")
-    time.sleep(2)
-    # Execute reboot
-    subprocess.run(['sudo', 'reboot'])
+    time.sleep(1)
+    os.system("sync")
+    # Initiate clean shutdown. When 24V power is restored by Phoenix Contact STEP-CAP,
+    # the reTerminal DM CM4 will automatically power on and boot up cleanly.
+    subprocess.run(['sudo', 'shutdown', '-h', 'now'])
 
 # Main loop
 power_fail_start_time = None
 
 try:
     while True:
-        # NEW LOGIC: 
+        # LOGIC: 
         # ups_pin.value == 0 means the UPS has grounded the pin (Power Failed)
         # ups_pin.value == 1 means the UPS is open (Power is Good)
         if ups_pin.value == 0:
@@ -49,8 +51,8 @@ try:
             else:
                 elapsed = time.time() - power_fail_start_time
                 if elapsed >= DELAY_SECONDS:
-                    logging.critical(f"Power failure confirmed for {DELAY_SECONDS}s. Rebooting.")
-                    recovery_reboot()
+                    logging.critical(f"Power failure confirmed for {DELAY_SECONDS}s. Shutting down cleanly.")
+                    safe_poweroff()
                     time.sleep(60) 
         else:
             if power_fail_start_time is not None:

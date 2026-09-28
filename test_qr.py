@@ -42,11 +42,14 @@ def main():
         
     remote_ip = ui.select(ip_options, value=default_ip, label="Select Network Interface").classes('w-full')
 
+    from utils import generate_qr_svg
+
     @ui.refreshable
     def render_qr():
         current_ip = remote_ip.value
-        ui.html(f'<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://{current_ip}:8080" />', sanitize=False)
-        ui.label(f"http://{current_ip}:8080").classes('text-subtitle1 text-grey font-mono q-mt-sm')
+        url_target = f"http://{current_ip}:8080"
+        ui.html(generate_qr_svg(url_target, size=150), sanitize=False)
+        ui.label(url_target).classes('text-subtitle1 text-grey font-mono q-mt-sm')
 
     remote_ip.on('update:model-value', render_qr.refresh)
     # Render initially

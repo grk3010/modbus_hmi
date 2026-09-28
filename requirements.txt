@@ -42,6 +42,7 @@ pylogix
 pymodbus
 pyOpenSSL
 pyserial
+qrcode
 python-dateutil
 python-dotenv
 python-engineio

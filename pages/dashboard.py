@@ -1,6 +1,6 @@
 import os
 from nicegui import ui
-from shared_state import settings, modbus_client, opcua_client, get_effective_units, apply_unit_scaling
+from shared_state import settings, modbus_client, opcua_client, sensor_parser, get_effective_units, apply_unit_scaling
 
 @ui.page('/')
 def index():
@@ -207,20 +207,29 @@ def index():
                 _make_mp_card(p, name_fallback, key_prefix)
                     
     def update_cards():
-        if modbus_client.master_online:
-            global_status.set_source('/iodd_assets/assets/connected.png')
-        else:
-            global_status.set_source('/iodd_assets/assets/disconnected.png')
+        new_status_src = '/iodd_assets/assets/connected.png' if modbus_client.master_online else '/iodd_assets/assets/disconnected.png'
+        if global_status.source != new_status_src:
+            global_status.set_source(new_status_src)
             
+        def _set_label(key, text):
+            el = ui_elements.get(key)
+            if el and el.text != text:
+                el.set_text(text)
+
+        def _set_vis(key, is_visible):
+            el = ui_elements.get(key)
+            if el and el.visible != is_visible:
+                el.set_visibility(is_visible)
+
         # Update Compressor status
         if opcua_client and opcua_client.connected:
             comp_state = "RUNNING" if opcua_client.data.get("running") else "STOPPED"
             comp_lbl = f"{comp_state} | {opcua_client.data.get('pressure', 0):.1f} kPa"
-            ui_elements['comp_status'].set_text(comp_lbl)
-            ui_elements['comp_status_mob'].set_text(comp_lbl)
+            _set_label('comp_status', comp_lbl)
+            _set_label('comp_status_mob', comp_lbl)
         else:
-            ui_elements['comp_status'].set_text("OFFLINE")
-            ui_elements['comp_status_mob'].set_text("OFFLINE")
+            _set_label('comp_status', "OFFLINE")
+            _set_label('comp_status_mob', "OFFLINE")
             
         def _get_val(p, key, unit, v_type):
             is_simulating = settings.get("use_simulation", False)
@@ -248,11 +257,12 @@ def index():
             if raw_val is None:
                 # Fallback: check if we have it under a descriptive name from IODD
                 pid = settings.get(str(p))
-                smap = sensor_parser.get_sensor_map(pid)
-                for k, v in smap.items():
-                    if v.get('display_name') and key in v['display_name']:
-                         raw_val = data.get(k)
-                         break
+                if pid:
+                    smap = sensor_parser.get_sensor_map(pid)
+                    for k, v in smap.items():
+                        if v.get('display_name') and key in v['display_name']:
+                             raw_val = data.get(k)
+                             break
             
             if raw_val is None: return '---'
 
@@ -274,42 +284,32 @@ def index():
         _, p_mp3, f_mp3 = get_effective_units(int(mp3))
 
         # Update sensors visually if online
-        v_gp1 = _get_val(gp1, 'Pressure', p_gp1, 'pres')
-        ui_elements['gp1_val'].set_text(v_gp1)
-        ui_elements['gp1_val_mob'].set_text(v_gp1)
+        _set_label('gp1_val', _get_val(gp1, 'Pressure', p_gp1, 'pres'))
+        _set_label('gp1_val_mob', _get_val(gp1, 'Pressure', p_gp1, 'pres'))
         
-        v_gp2 = _get_val(gp2, 'Pressure', p_gp2, 'pres')
-        ui_elements['gp2_val'].set_text(v_gp2)
-        ui_elements['gp2_val_mob'].set_text(v_gp2)
+        _set_label('gp2_val', _get_val(gp2, 'Pressure', p_gp2, 'pres'))
+        _set_label('gp2_val_mob', _get_val(gp2, 'Pressure', p_gp2, 'pres'))
         
-        f_m1 = _get_val(mp1, '1FlowInst', f_mp1, 'flow')
-        p_m1 = _get_val(mp1, '1Pressure', p_mp1, 'pres')
-        ui_elements['mp1_flow'].set_text(f_m1)
-        ui_elements['mp1_pres'].set_text(p_m1)
-        ui_elements['mp1_flow_mob'].set_text(f_m1)
-        ui_elements['mp1_pres_mob'].set_text(p_m1)
+        _set_label('mp1_flow', _get_val(mp1, '1FlowInst', f_mp1, 'flow'))
+        _set_label('mp1_pres', _get_val(mp1, '1Pressure', p_mp1, 'pres'))
+        _set_label('mp1_flow_mob', _get_val(mp1, '1FlowInst', f_mp1, 'flow'))
+        _set_label('mp1_pres_mob', _get_val(mp1, '1Pressure', p_mp1, 'pres'))
         
-        f_m2 = _get_val(mp2, '1FlowInst', f_mp2, 'flow')
-        p_m2 = _get_val(mp2, '1Pressure', p_mp2, 'pres')
-        ui_elements['mp2_flow'].set_text(f_m2)
-        ui_elements['mp2_pres'].set_text(p_m2)
-        ui_elements['mp2_flow_mob'].set_text(f_m2)
-        ui_elements['mp2_pres_mob'].set_text(p_m2)
+        _set_label('mp2_flow', _get_val(mp2, '1FlowInst', f_mp2, 'flow'))
+        _set_label('mp2_pres', _get_val(mp2, '1Pressure', p_mp2, 'pres'))
+        _set_label('mp2_flow_mob', _get_val(mp2, '1FlowInst', f_mp2, 'flow'))
+        _set_label('mp2_pres_mob', _get_val(mp2, '1Pressure', p_mp2, 'pres'))
         
-        f_m3 = _get_val(mp3, '1FlowInst', f_mp3, 'flow')
-        p_m3 = _get_val(mp3, '1Pressure', p_mp3, 'pres')
-        ui_elements['mp3_flow'].set_text(f_m3)
-        ui_elements['mp3_pres'].set_text(p_m3)
-        ui_elements['mp3_flow_mob'].set_text(f_m3)
-        ui_elements['mp3_pres_mob'].set_text(p_m3)
+        _set_label('mp3_flow', _get_val(mp3, '1FlowInst', f_mp3, 'flow'))
+        _set_label('mp3_pres', _get_val(mp3, '1Pressure', p_mp3, 'pres'))
+        _set_label('mp3_flow_mob', _get_val(mp3, '1FlowInst', f_mp3, 'flow'))
+        _set_label('mp3_pres_mob', _get_val(mp3, '1Pressure', p_mp3, 'pres'))
 
         # Update Red X overlays based on actual port status
         is_sim = settings.get("use_simulation", False)
         for p, key in [(gp1, 'gp1'), (gp2, 'gp2'), (mp1, 'mp1'), (mp2, 'mp2'), (mp3, 'mp3')]:
             status = modbus_client.port_status.get(int(p), False) if not is_sim else True
-            if f'{key}_x' in ui_elements:
-                ui_elements[f'{key}_x'].set_visibility(not status)
-            if f'{key}_x_mob' in ui_elements:
-                ui_elements[f'{key}_x_mob'].set_visibility(not status)
+            _set_vis(f'{key}_x', not status)
+            _set_vis(f'{key}_x_mob', not status)
 
     ui.timer(1.0, update_cards)

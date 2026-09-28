@@ -518,7 +518,9 @@ class StorageBrowserDialog(ui.dialog):
                     self.format_btn.props('loading')
                     ui.notify(f"Formatting /dev/{dev} and mounting to /mnt/ssd...", type="info", timeout=5000)
                     try:
-                        proc = await asyncio.create_subprocess_exec("sudo", "bash", "/home/pi/modbus_hmi/scripts/setup_ssd.sh", dev, "--force")
+                        base_dir = os.path.dirname(os.path.abspath(__file__))
+                        script_path = os.path.join(base_dir, "scripts", "setup_ssd.sh")
+                        proc = await asyncio.create_subprocess_exec("sudo", "bash", script_path, dev, "--force")
                         await proc.communicate()
                         if proc.returncode == 0:
                             ui.notify("SSD successfully formatted and mounted to /mnt/ssd!", type="positive")

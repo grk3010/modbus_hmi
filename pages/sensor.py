@@ -178,39 +178,40 @@ def sensor_page(port_id: str):
                 val /= 10.0
                 return val
 
+            def update_knob(el_key, val, metric_name, default_max, default_caut, default_warn, default_color_norm, default_color_caut, default_color_warn):
+                knob = elements.get(el_key)
+                if not knob: return
+                
+                max_val = float(settings.get(f"{port_num}_{metric_name}_max", default_max))
+                caut_val = float(settings.get(f"{port_num}_{metric_name}_caution", default_caut))
+                warn_val = float(settings.get(f"{port_num}_{metric_name}_warn", default_warn))
+                
+                color_norm = settings.get(f"{port_num}_{metric_name}_color_norm", default_color_norm)
+                color_caut = settings.get(f"{port_num}_{metric_name}_color_caut", default_color_caut)
+                color_warn = settings.get(f"{port_num}_{metric_name}_color_warn", default_color_warn)
+                
+                r_val = round(val, 1)
+                if val >= warn_val:
+                    color = color_warn
+                elif val >= caut_val:
+                    color = color_caut
+                else:
+                    color = color_norm
+                    
+                curr_state = (r_val, max_val, color)
+                if getattr(knob, '_last_state', None) != curr_state:
+                    knob._last_state = curr_state
+                    knob.value = r_val
+                    knob.props(f'max={max_val}')
+                    knob.style(f'--gauge-color: {color} !important; color: {color} !important')
+                    knob.update()
+
             if "MP-F" in sensor_type:
                 flow = _get_sensor_val('1FlowInst', 'flow')
                 flow_tot = apply_unit_scaling(data.get('1FlowTotal', 0), 'flow_total', port_num)
                 pressure = _get_sensor_val('1Pressure', 'pres')
                 temp = _get_sensor_val('1Temperature', 'temp')
                 hum = _get_sensor_val('1Humidity', 'hum')
-                
-                def update_knob(el_key, val, metric_name, default_max, default_caut, default_warn, default_color_norm, default_color_caut, default_color_warn):
-                    knob = elements.get(el_key)
-                    if not knob: return
-                    
-                    max_val = float(settings.get(f"{port_num}_{metric_name}_max", default_max))
-                    caut_val = float(settings.get(f"{port_num}_{metric_name}_caution", default_caut))
-                    warn_val = float(settings.get(f"{port_num}_{metric_name}_warn", default_warn))
-                    
-                    color_norm = settings.get(f"{port_num}_{metric_name}_color_norm", default_color_norm)
-                    color_caut = settings.get(f"{port_num}_{metric_name}_color_caut", default_color_caut)
-                    color_warn = settings.get(f"{port_num}_{metric_name}_color_warn", default_color_warn)
-                    
-                    knob.value = round(val, 1)
-                    
-                    if val >= warn_val:
-                        color = color_warn
-                    elif val >= caut_val:
-                        color = color_caut
-                    else:
-                        color = color_norm
-                        
-                    # Target both the text and arc (via inherited style)
-                    knob.value = round(val, 1)
-                    knob.props(f'max={max_val}')
-                    knob.style(f'--gauge-color: {color} !important; color: {color} !important')
-                    knob.update()
 
                 # Enforce Defaults: Temp 200, Pres 200, Hum 100, Flow 200
                 update_knob('temp_knob', temp, 'temp', 200, 160, 180, "#ef4444", "#f59e0b", "#991b1b")
@@ -219,7 +220,9 @@ def sensor_page(port_id: str):
                 update_knob('flow_knob', flow, 'flow', 200, 160, 180, "#3b82f6", "#60a5fa", "#2563eb")
 
                 if tot_lbl := elements.get('flow_tot_lbl'):
-                    tot_lbl.set_text(f"{round(flow_tot, 1)} {flow_unit}")
+                    new_tot_text = f"{round(flow_tot, 1)} {flow_unit}"
+                    if tot_lbl.text != new_tot_text:
+                        tot_lbl.set_text(new_tot_text)
                 
                 v_raw = _get_sensor_val('1ValveState', 'boolean')
                 if toggle := elements.get('valve_toggle'):
@@ -228,37 +231,15 @@ def sensor_page(port_id: str):
             elif "GP-M" in sensor_type:
                 pressure = _get_sensor_val('Pressure', 'pres')
                 temp = _get_sensor_val('Temp', 'temp')
-                
-                def update_knob(el_key, val, metric_name, default_max, default_caut, default_warn, default_color_norm, default_color_caut, default_color_warn):
-                    knob = elements.get(el_key)
-                    if not knob: return
-                    max_val = float(settings.get(f"{port_num}_{metric_name}_max", default_max))
-                    caut_val = float(settings.get(f"{port_num}_{metric_name}_caution", default_caut))
-                    warn_val = float(settings.get(f"{port_num}_{metric_name}_warn", default_warn))
-                    
-                    color_norm = settings.get(f"{port_num}_{metric_name}_color_norm", default_color_norm)
-                    color_caut = settings.get(f"{port_num}_{metric_name}_color_caut", default_color_caut)
-                    color_warn = settings.get(f"{port_num}_{metric_name}_color_warn", default_color_warn)
-                    
-                    knob.value = round(val, 1)
-                    if val >= warn_val:
-                        color = color_warn
-                    elif val >= caut_val:
-                        color = color_caut
-                    else:
-                        color = color_norm
-                    
-                    knob.value = round(val, 1)
-                    knob.props(f'max={max_val}')
-                    knob.style(f'--gauge-color: {color} !important; color: {color} !important')
-                    knob.update()
 
                 update_knob('pres_knob', pressure, 'pres', 200, 160, 180, "#f59e0b", "#fbbf24", "#ef4444")
                 update_knob('temp_knob', temp, 'temp', 200, 160, 180, "#ef4444", "#f59e0b", "#991b1b")
             else:
                 gen_lbl = elements.get('generic')
                 if gen_lbl:
-                    gen_lbl.set_text(", ".join([f"{k}: {v}" for k, v in data.items()]))
+                    new_gen_text = ", ".join([f"{k}: {v}" for k, v in data.items()])
+                    if gen_lbl.text != new_gen_text:
+                        gen_lbl.set_text(new_gen_text)
 
         ui.timer(1.0, update_single_card)
         
