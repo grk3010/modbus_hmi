@@ -20,12 +20,10 @@ if [ -f /etc/xdg/labwc/autostart ]; then
     . /etc/xdg/labwc/autostart
 fi
 
-# Launch the web interface in a normal window (so the user can close/minimize it)
-rm -rf /home/pi/.config/chromium/Singleton*
-rm -rf /home/pi/.config/chromium/Default/Sessions
-rm -rf /home/pi/.config/chromium/Sessions
-sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/g' /home/pi/.config/chromium/Default/Preferences 2>/dev/null || true
-(sleep 2 && chromium --incognito --noerrdialogs --disable-translate --no-first-run --fast --fast-start --disable-infobars --disable-session-crashed-bubble --hide-crash-restore-bubble --disable-features=TranslateUI --disk-cache-dir=/tmp/chromium_cache --password-store=basic --ozone-platform=wayland --enable-features=UseOzonePlatform http://localhost:8080) &
+# Launch the web interface using an ephemeral profile directory to completely disable crash restore bubbles
+rm -rf /tmp/chromium_desktop
+mkdir -p /tmp/chromium_desktop
+(sleep 2 && chromium --user-data-dir=/tmp/chromium_desktop --incognito --noerrdialogs --disable-translate --no-first-run --fast --fast-start --disable-infobars --disable-session-crashed-bubble --hide-crash-restore-bubble --disable-features=TranslateUI --disk-cache-dir=/tmp/chromium_cache --password-store=basic --ozone-platform=wayland --enable-features=UseOzonePlatform http://localhost:8080) &
 EOF
 chmod +x /home/pi/.config/labwc/autostart
 

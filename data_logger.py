@@ -130,17 +130,54 @@ class DataLogger:
         """Asynchronously log data to SQLite by running in a separate thread to prevent blocking."""
         await asyncio.to_thread(self.log_data, port, sensor_type, data)
         
-    def get_historical_data(self, hours_back: float = 1.0):
-        """Fetches historical sensor logs from the last X hours."""
+    def get_historical_data(self, hours_back: float = 1.0, start_date: str = None, end_date: str = None):
+        """Fetches historical sensor logs. If start_date is provided, queries between start_date and end_date (or now)."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT timestamp, port, sensor_type, data 
-                    FROM sensor_logs 
-                    WHERE timestamp >= datetime('now', ? || ' hours')
-                    ORDER BY timestamp ASC
-                ''', (f'-{hours_back}',))
+                step = 1
+                if start_date:
+                    step = 127
+                else:
+                    if hours_back >= 720:
+                        step = 503
+                    elif hours_back >= 168:
+                        step = 127
+                    elif hours_back >= 24:
+                        step = 19
+                    elif hours_back >= 6:
+                        step = 5
+
+                if start_date:
+                    query = '''
+                        SELECT timestamp, port, sensor_type, data 
+                        FROM sensor_logs 
+                        WHERE timestamp >= ?
+                    '''
+                    params = [f"{start_date} 00:00:00" if len(start_date) <= 10 else start_date]
+                    if end_date:
+                        query += ' AND timestamp <= ?'
+                        params.append(f"{end_date} 23:59:59" if len(end_date) <= 10 else end_date)
+                    if step > 1:
+                        query += ' AND id % ? == 0'
+                        params.append(step)
+                    query += ' ORDER BY timestamp ASC'
+                    cursor.execute(query, params)
+                else:
+                    if step > 1:
+                        cursor.execute('''
+                            SELECT timestamp, port, sensor_type, data 
+                            FROM sensor_logs 
+                            WHERE timestamp >= datetime('now', ? || ' hours') AND id % ? == 0
+                            ORDER BY timestamp ASC
+                        ''', (f'-{hours_back}', step))
+                    else:
+                        cursor.execute('''
+                            SELECT timestamp, port, sensor_type, data 
+                            FROM sensor_logs 
+                            WHERE timestamp >= datetime('now', ? || ' hours')
+                            ORDER BY timestamp ASC
+                        ''', (f'-{hours_back}',))
                 rows = cursor.fetchall()
                 
                 results = []
@@ -156,6 +193,6 @@ class DataLogger:
             logger.error(f"Failed to fetch historical data: {e}")
             return []
 
-    async def get_historical_data_async(self, hours_back: float = 1.0):
+    async def get_historical_data_async(self, hours_back: float = 1.0, start_date: str = None, end_date: str = None):
         """Asynchronously fetches historical data."""
-        return await asyncio.to_thread(self.get_historical_data, hours_back)
+        return await asyncio.to_thread(self.get_historical_data, hours_back, start_date, end_date)
