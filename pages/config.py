@@ -454,7 +454,7 @@ def config_page():
                     """Run update_dashboard.sh with optional tarball path for offline updates."""
                     update_status.set_text('Applying update...')
                     update_log.classes(remove='hidden')
-                    update_log.value = ''
+                    update_log.value = 'Starting update...\n'
                     try:
                         app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                         script = os.path.join(app_dir, 'update_dashboard.sh')
@@ -464,15 +464,21 @@ def config_page():
                         proc = await asyncio.create_subprocess_exec(
                             *cmd,
                             cwd=app_dir,
-                            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.STDOUT
                         )
-                        stdout, _ = await proc.communicate()
-                        output = stdout.decode()
-                        update_log.value = output
+                        lines = []
+                        while True:
+                            line = await proc.stdout.readline()
+                            if not line:
+                                break
+                            lines.append(line.decode(errors='replace'))
+                            update_log.value = ''.join(lines)
+                        await proc.wait()
                         if proc.returncode == 0:
                             version_label.set_text(get_current_version())
-                            update_status.set_text('Update applied successfully!')
-                            ui.notify('Update complete! Service will restart.', type='positive')
+                            update_status.set_text('Update applied successfully! Restarting service...')
+                            ui.notify('Update complete! Service is restarting...', type='positive')
                         else:
                             update_status.set_text('Update failed. Check log below.')
                             ui.notify('Update failed.', type='negative')
@@ -490,7 +496,12 @@ def config_page():
                             cwd=app_dir,
                             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
                         )
-                        await proc.communicate()
+                        _, fetch_err = await proc.communicate()
+                        if proc.returncode != 0:
+                            update_status.set_text('Failed to reach remote repository.')
+                            update_log.value = fetch_err.decode(errors='replace')
+                            ui.notify('Could not reach GitHub remote.', type='negative')
+                            return
 
                         proc_local = await asyncio.create_subprocess_exec(
                             'git', 'rev-parse', 'HEAD',
@@ -510,23 +521,38 @@ def config_page():
 
                         if proc_remote.returncode != 0:
                             update_status.set_text('No upstream configured. Push to a remote first.')
-                            update_log.value = remote_err.decode()
+                            update_log.value = remote_err.decode(errors='replace')
                         elif local_hash == remote_hash:
                             update_status.set_text(f'Up to date ({local_hash})')
+                            update_log.value = f'Local HEAD ({local_hash}) matches remote origin/main ({remote_hash}).'
                             ui.notify('Already up to date!', type='positive')
                         else:
+                            # Show commit log of incoming changes
+                            proc_log = await asyncio.create_subprocess_exec(
+                                'git', 'log', '--oneline', 'HEAD..@{u}',
+                                cwd=app_dir,
+                                stdout=asyncio.subprocess.PIPE
+                            )
+                            log_out, _ = await proc_log.communicate()
                             update_status.set_text(f'Update available: {local_hash} → {remote_hash}')
+                            update_log.value = f"Incoming commits:\n{log_out.decode(errors='replace')}"
                             ui.notify('Update available!', type='info')
                     except Exception as e:
                         update_status.set_text(f'Error: {e}')
 
                 async def handle_offline_upload(e):
-                    """Handle uploaded .tar.gz file for offline update."""
+                    """Handle uploaded .tar.gz file for offline update (supports NiceGUI 3.x e.file and legacy e.content)."""
                     import tempfile
-                    tmp_path = os.path.join(tempfile.gettempdir(), e.name)
-                    with open(tmp_path, 'wb') as f:
-                        f.write(e.content.read())
-                    ui.notify(f'Uploaded {e.name}. Applying update...', type='info')
+                    if hasattr(e, 'file') and e.file is not None:
+                        fname = os.path.basename(e.file.name)
+                        tmp_path = os.path.join(tempfile.gettempdir(), fname)
+                        await e.file.save(tmp_path)
+                    else:
+                        fname = os.path.basename(e.name)
+                        tmp_path = os.path.join(tempfile.gettempdir(), fname)
+                        with open(tmp_path, 'wb') as f:
+                            f.write(e.content.read())
+                    ui.notify(f'Uploaded {fname}. Applying update...', type='info')
                     await run_update_script(tarball_path=tmp_path)
 
                 import asyncio
@@ -543,12 +569,18 @@ def config_page():
             ui.separator().classes('w-full q-my-md')
             
             async def handle_upload(e):
-                # Basic upload handler
+                # Basic upload handler (supports NiceGUI 3.x e.file and legacy e.content)
                 os.makedirs(IODD_DIR, exist_ok=True)
-                file_path = os.path.join(IODD_DIR, e.name)
-                with open(file_path, 'wb') as f:
-                    f.write(e.content.read())
-                ui.notify(f"Uploaded {e.name}")
+                if hasattr(e, 'file') and e.file is not None:
+                    fname = os.path.basename(e.file.name)
+                    file_path = os.path.join(IODD_DIR, fname)
+                    await e.file.save(file_path)
+                else:
+                    fname = os.path.basename(e.name)
+                    file_path = os.path.join(IODD_DIR, fname)
+                    with open(file_path, 'wb') as f:
+                        f.write(e.content.read())
+                ui.notify(f"Uploaded {fname}")
                 sensor_parser._extract_all()
                 sensor_parser._parse_all()
                 # Reload page to refresh select options
@@ -595,84 +627,45 @@ def config_page():
 
             ui.separator().classes('w-full q-my-md')
             ui.label("System Control").classes('text-h6')
-            
-            async def run_chromium(kiosk=False):
-                import os
+
+            async def _graceful_session_restart():
+                """Gracefully close Chromium before exiting labwc so Chromium never records a crash."""
                 import asyncio
-                user_home = os.path.expanduser("~")
-                
-                # Setup environment for Wayland
-                env = os.environ.copy()
-                env["WAYLAND_DISPLAY"] = "wayland-0"
-                env["XDG_RUNTIME_DIR"] = "/run/user/1000"
-                
-                # Kill existing chromium
                 try:
-                    await asyncio.create_subprocess_exec("pkill", "chromium")
-                    await asyncio.sleep(1) # Wait for cleanup
-                except:
+                    proc = await asyncio.create_subprocess_exec(
+                        "pkill", "-TERM", "-f", "/usr/lib/chromium/chromium"
+                    )
+                    await proc.wait()
+                    await asyncio.sleep(0.5)
+                except Exception:
                     pass
-                
-                # Use real cache dir to avoid Errors
-                chrome_cache = "/tmp/chromium_cache"
-                os.makedirs(chrome_cache, exist_ok=True)
-                
-                # Remove stale SingletonLock/Cookie
-                chrome_config = os.path.expanduser("~/.config/chromium")
-                for f in ["SingletonLock", "SingletonCookie"]:
-                    lock_file = os.path.join(chrome_config, f)
-                    if os.path.exists(lock_file):
-                        try: os.remove(lock_file)
-                        except: pass
-                
-                # Ensure wallpaper is running (swaybg)
-                try:
-                    await asyncio.create_subprocess_exec("pkill", "swaybg")
-                    await asyncio.sleep(0.1)
-                except:
-                    pass
-                wallpaper_path = os.path.join(PROJECT_ROOT, "iodd_files", "assets", "compressor_graphic.png")
-                await asyncio.create_subprocess_exec("swaybg", "-i", wallpaper_path, "-m", "fill", env=env)
-                
-                cmd = ["chromium", "--incognito", "--noerrdialogs", "--disable-translate", "--no-first-run", 
-                       "--fast", "--fast-start", "--disable-infobars", "--disable-features=TranslateUI", 
-                       f"--disk-cache-dir={chrome_cache}", "--password-store=basic", "--ozone-platform=wayland", 
-                       "--enable-features=UseOzonePlatform", "http://localhost:8080"]
-                
-                if kiosk:
-                    cmd.insert(1, "--kiosk")
-                
-                # Relaunch
-                await asyncio.create_subprocess_exec(*cmd, env=env)
+                # Ask labwc to exit cleanly; fall back to pkill if needed
+                proc_exit = await asyncio.create_subprocess_exec("labwc", "-e")
+                await proc_exit.wait()
+                await asyncio.sleep(0.2)
+                await asyncio.create_subprocess_exec("pkill", "-TERM", "labwc")
 
             async def exit_to_desktop():
                 ui.notify("Switching to Full Desktop...", type='info')
                 try:
-                    import os
                     # Create trigger for .profile to skip kiosk and launch full desktop
                     no_kiosk_path = "/home/pi/.no_kiosk"
                     with open(no_kiosk_path, 'w') as f:
                         f.write('1')
-                    
-                    # Kill current labwc session (minimal kiosk)
-                    # This will trigger a logout/relogin due to CLI autologin
-                    import asyncio
-                    await asyncio.create_subprocess_exec("pkill", "labwc")
+
+                    await _graceful_session_restart()
                 except Exception as e:
                     ui.notify(f"Error: {e}", type='negative')
 
             async def enter_kiosk_mode():
                 ui.notify("Entering Kiosk Mode...", type='info')
                 try:
-                    import os
                     # Remove trigger to ensure .profile launches kiosk
                     no_kiosk_path = "/home/pi/.no_kiosk"
                     if os.path.exists(no_kiosk_path):
                         os.remove(no_kiosk_path)
-                    
-                    # Kill current labwc session (full desktop)
-                    import asyncio
-                    await asyncio.create_subprocess_exec("pkill", "labwc")
+
+                    await _graceful_session_restart()
                 except Exception as e:
                     ui.notify(f"Error: {e}", type='negative')
 

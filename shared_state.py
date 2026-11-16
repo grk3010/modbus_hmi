@@ -37,8 +37,12 @@ def load_settings():
 load_settings()
 
 def save_settings():
-    with open(SETTINGS_FILE, "w") as f:
+    tmp_file = SETTINGS_FILE + ".tmp"
+    with open(tmp_file, "w") as f:
         json.dump(settings, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_file, SETTINGS_FILE)
     ui.notify("Settings saved!", type="positive")
 
 def get_effective_units(port_num):

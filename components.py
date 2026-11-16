@@ -7,9 +7,12 @@ from shared_state import settings, save_settings
 class KeyboardDialog(ui.dialog):
     def __init__(self, title, initial_value='', on_save=None):
         super().__init__()
-        self.input_data = initial_value
+        self.input_data = initial_value or ''
         self.on_save = on_save
         self.caps = False
+        self._key_buttons = []
+        self._caps_btn = None
+        self.on('hide', self.delete)
         
         with self, ui.card().classes('w-[850px] max-w-[95vw] bg-[#1a1c1e] text-white border-2 border-primary shadow-2xl'):
             ui.label(title).classes('text-h6 font-bold text-primary q-mb-sm')
@@ -36,19 +39,25 @@ class KeyboardDialog(ui.dialog):
                         ui.button('OK', on_click=self._submit).props('color=primary text-white').classes('px-8')
 
     def _draw_keys(self):
-        self.key_container.clear()
+        self._key_buttons.clear()
         with self.key_container:
             for row in self.rows:
                 with ui.row().classes('w-full justify-center gap-1 no-wrap'):
                     if row == self.rows[2]: # A row
-                        ui.button('CAPS', on_click=self._toggle_caps).props(f'flat {"bg-primary" if self.caps else "bg-grey-9"} text-white').classes('w-16 h-12')
+                        self._caps_btn = ui.button('CAPS', on_click=self._toggle_caps).props('flat bg-grey-9 text-white').classes('w-16 h-12')
                     for key in row:
-                        val = key.upper() if self.caps else key
-                        ui.button(val, on_click=lambda k=val: self._press(k)).props('flat bg-grey-9 text-white').classes('w-10 h-12 text-bold')
+                        btn = ui.button(key, on_click=lambda k=key: self._press_key(k)).props('flat bg-grey-9 text-white').classes('w-10 h-12 text-bold')
+                        self._key_buttons.append((key, btn))
 
     def _toggle_caps(self):
         self.caps = not self.caps
-        self._draw_keys()
+        if self._caps_btn:
+            self._caps_btn.props(f'flat {"bg-primary" if self.caps else "bg-grey-9"} text-white')
+        for raw_key, btn in self._key_buttons:
+            btn.set_text(raw_key.upper() if self.caps else raw_key)
+
+    def _press_key(self, raw_key):
+        self._press(raw_key.upper() if self.caps else raw_key)
 
     def _press(self, key):
         self.input_data += key
@@ -68,6 +77,7 @@ class NumpadDialog(ui.dialog):
         super().__init__()
         self.input_data = str(initial_value)
         self.on_save = on_save
+        self.on('hide', self.delete)
         
         with self, ui.card().classes('w-80 bg-[#1a1c1e] text-white border-2 border-indigo-500 shadow-2xl items-center'):
             ui.label(title).classes('text-h6 font-bold text-indigo-400 q-mb-sm')
@@ -151,6 +161,7 @@ class IPNumpadDialog(ui.dialog):
         super().__init__()
         self.input_data = str(initial_value)
         self.on_save = on_save
+        self.on('hide', self.delete)
         
         with self, ui.card().classes('w-80 bg-[#1a1c1e] text-white border-2 border-indigo-500 shadow-2xl items-center'):
             ui.label(title).classes('text-h6 font-bold text-indigo-400 q-mb-sm')
@@ -215,12 +226,12 @@ class ValveToggle(ui.element):
         self.modbus_client = client
         self._user_action_time = 0.0  # Timestamp of last user toggle
         self._debounce_seconds = 3.0  # Ignore polled updates for this long after a user click
-        self.classes('relative inline-flex items-center w-[168px] h-[72px] rounded-full cursor-pointer transition-all duration-300 border-4 border-solid shadow-sm select-none shrink-0')
+        self.classes('relative inline-flex items-center w-[168px] h-[72px] rounded-full cursor-pointer transition-colors duration-150 active:scale-95 border-4 border-solid shadow-sm select-none shrink-0')
         self.on('click', self.toggle)
         
         with self:
-            self.thumb = ui.element('div').classes('absolute w-[54px] h-[54px] bg-white rounded-full shadow-md transition-all duration-300 z-10')
-            self.lbl = ui.label('').classes('absolute text-white font-bold text-lg tracking-wider pointer-events-none transition-all duration-300 z-0')
+            self.thumb = ui.element('div').classes('absolute w-[54px] h-[54px] bg-white rounded-full shadow-md transition-all duration-150 z-10')
+            self.lbl = ui.label('').classes('absolute text-white font-bold text-lg tracking-wider pointer-events-none transition-all duration-150 z-0')
             
         self._update_appearance()
 
@@ -257,12 +268,12 @@ class SimulationToggle(ui.element):
     def __init__(self, initial_state=False):
         super().__init__('div')
         self.state = initial_state
-        self.classes('relative inline-flex items-center w-[168px] h-[72px] rounded-full cursor-pointer transition-all duration-300 border-4 border-solid shadow-sm select-none shrink-0')
+        self.classes('relative inline-flex items-center w-[168px] h-[72px] rounded-full cursor-pointer transition-colors duration-150 active:scale-95 border-4 border-solid shadow-sm select-none shrink-0')
         self.on('click', self.toggle)
         
         with self:
-            self.thumb = ui.element('div').classes('absolute w-[54px] h-[54px] bg-white rounded-full shadow-md transition-all duration-300 z-10')
-            self.lbl = ui.label('').classes('absolute text-white font-bold text-lg tracking-wider pointer-events-none transition-all duration-300 z-0')
+            self.thumb = ui.element('div').classes('absolute w-[54px] h-[54px] bg-white rounded-full shadow-md transition-all duration-150 z-10')
+            self.lbl = ui.label('').classes('absolute text-white font-bold text-lg tracking-wider pointer-events-none transition-all duration-150 z-0')
             
         self._update_appearance()
 
@@ -291,12 +302,12 @@ class HostNetworkToggle(ui.element):
         self._on_change = on_change
         self.is_processing = False
         # Make the pill wider to fit longer text
-        self.classes('relative inline-flex items-center w-[168px] h-[72px] rounded-full cursor-pointer transition-all duration-300 border-4 border-solid shadow-sm select-none shrink-0')
+        self.classes('relative inline-flex items-center w-[168px] h-[72px] rounded-full cursor-pointer transition-colors duration-150 active:scale-95 border-4 border-solid shadow-sm select-none shrink-0')
         self.on('click', self.toggle)
         
         with self:
-            self.thumb = ui.element('div').classes('absolute w-[54px] h-[54px] bg-white rounded-full shadow-md transition-all duration-300 z-10')
-            self.lbl = ui.label('').classes('absolute text-white font-bold text-lg tracking-wider pointer-events-none transition-all duration-300 z-0')
+            self.thumb = ui.element('div').classes('absolute w-[54px] h-[54px] bg-white rounded-full shadow-md transition-all duration-150 z-10')
+            self.lbl = ui.label('').classes('absolute text-white font-bold text-lg tracking-wider pointer-events-none transition-all duration-150 z-0')
             
         self._update_appearance()
 
@@ -347,6 +358,7 @@ class GaugeSettingsDialog(ui.dialog):
         self.port_num = port_num
         self.metric = metric_name
         self.on_save = on_save
+        self.on('hide', self.delete)
         
         # Keys for settings
         max_key = f"{port_num}_{metric_name}_max"
@@ -411,6 +423,8 @@ class StorageBrowserDialog(ui.dialog):
     def __init__(self, initial_dir='/mnt', on_select=None):
         super().__init__()
         self.on_select = on_select
+        self._drives_loaded = False
+        self.on('hide', self.delete)
         if not initial_dir or not os.path.exists(initial_dir):
             self.current_dir = os.path.abspath('/')
         else:
@@ -441,25 +455,27 @@ class StorageBrowserDialog(ui.dialog):
         self.path_lbl.set_text(self.current_dir)
         self.list_container.clear()
         
-        drives = {}
-        try:
-            out = subprocess.check_output("lsblk -d -o NAME,SIZE,MODEL,TYPE", shell=True).decode()
-            for line in out.split("\n"):
-                if not line or "NAME" in line: continue
-                parts = line.split()
-                if len(parts) >= 3 and "disk" in line:
-                    name = parts[0]
-                    size = parts[1]
-                    model = " ".join(parts[2:-1]) if len(parts) > 3 else parts[2]
-                    if name.startswith("nvme") or name.startswith("sd"):
-                        drives[name] = f"/dev/{name} - {size} ({model})"
-        except Exception:
-            pass
-            
-        self.drive_select.options = drives
-        self.drive_select.update()
-        if drives and not self.drive_select.value:
-            self.drive_select.value = list(drives.keys())[0]
+        if not self._drives_loaded:
+            self._drives_loaded = True
+            drives = {}
+            try:
+                out = subprocess.check_output("lsblk -d -o NAME,SIZE,MODEL,TYPE", shell=True).decode()
+                for line in out.split("\n"):
+                    if not line or "NAME" in line: continue
+                    parts = line.split()
+                    if len(parts) >= 3 and "disk" in line:
+                        name = parts[0]
+                        size = parts[1]
+                        model = " ".join(parts[2:-1]) if len(parts) > 3 else parts[2]
+                        if name.startswith("nvme") or name.startswith("sd"):
+                            drives[name] = f"/dev/{name} - {size} ({model})"
+            except Exception:
+                pass
+                
+            self.drive_select.options = drives
+            self.drive_select.update()
+            if drives and not self.drive_select.value:
+                self.drive_select.value = list(drives.keys())[0]
 
         with self.list_container:
             parent = os.path.dirname(self.current_dir)

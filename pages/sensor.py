@@ -144,14 +144,17 @@ def sensor_page(port_id: str):
                         'Temp': random.uniform(200, 800)
                     }
 
-            if port_online:
-                sensor_status_icon.set_source('/iodd_assets/assets/connected.png')
-                sensor_status_lbl.set_text('Sensor Connected')
-                sensor_status_lbl.classes(replace='text-grey', add='text-green')
-            else:
-                sensor_status_icon.set_source('/iodd_assets/assets/disconnected.png')
-                sensor_status_lbl.set_text('Sensor Disconnected (Simulating)' if is_simulating else 'Sensor Disconnected')
-                sensor_status_lbl.classes(replace='text-green', add='text-grey')
+            new_icon_src = '/iodd_assets/assets/connected.png' if port_online else '/iodd_assets/assets/disconnected.png'
+            if sensor_status_icon.source != new_icon_src:
+                sensor_status_icon.set_source(new_icon_src)
+
+            new_status_txt = 'Sensor Connected' if port_online else ('Sensor Disconnected (Simulating)' if is_simulating else 'Sensor Disconnected')
+            if sensor_status_lbl.text != new_status_txt:
+                sensor_status_lbl.set_text(new_status_txt)
+                if port_online:
+                    sensor_status_lbl.classes(replace='text-grey', add='text-green')
+                else:
+                    sensor_status_lbl.classes(replace='text-green', add='text-grey')
                 
             if not data and not port_online and not is_simulating:
                 return

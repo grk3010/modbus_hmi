@@ -48,17 +48,28 @@ if [ "$OVERLAY_ACTIVE" = true ] && [ "$IS_STAGE2_RESUME" = false ]; then
   echo " Staging automated two-stage update sequence...   "
   echo "=================================================="
   
-  MARKER_FILE="/mnt/ssd/.update_pending"
+  MARKER_DIR="/mnt/ssd"
   if [ ! -d "/mnt/ssd" ]; then
-    MARKER_FILE="/boot/firmware/.update_pending"
+    MARKER_DIR="/boot/firmware"
   fi
+  MARKER_FILE="${MARKER_DIR}/.update_pending"
   
   echo "Dropping persistent update flag at $MARKER_FILE..."
   sudo touch "$MARKER_FILE"
   sudo chmod 777 "$MARKER_FILE" || true
   
   if [ -n "$1" ]; then
-    echo "$1" > "${MARKER_FILE}_target"
+    if [ ! -f "$1" ]; then
+      echo "Error: Update tarball not found: $1"
+      sudo rm -f "$MARKER_FILE"
+      exit 1
+    fi
+    # Copy tarball to persistent storage so it survives the Stage 1 reboot (since /tmp is tmpfs)
+    STAGED_TARBALL="${MARKER_DIR}/.staged_update.tar.gz"
+    echo "Persisting offline update archive to $STAGED_TARBALL..."
+    sudo cp "$1" "$STAGED_TARBALL"
+    sudo chmod 666 "$STAGED_TARBALL" || true
+    echo "$STAGED_TARBALL" | sudo tee "${MARKER_FILE}_target" > /dev/null
     sudo chmod 777 "${MARKER_FILE}_target" || true
   fi
   
@@ -66,7 +77,7 @@ if [ "$OVERLAY_ACTIVE" = true ] && [ "$IS_STAGE2_RESUME" = false ]; then
   sudo raspi-config nonint disable_overlayfs
   
   echo "Rebooting into writeable staging state..."
-  sudo reboot
+  nohup sudo bash -c "sleep 2 && reboot" >/dev/null 2>&1 &
   exit 0
 fi
 
@@ -80,19 +91,38 @@ if [ -n "$1" ]; then
 
   echo "Applying offline update from: $TARBALL"
 
-  # Create a backup
+  # Create a lightweight backup of application code (excluding venv, .git, and large SQLite DBs)
   BACKUP_DIR="/tmp/modbus_hmi_backup_$(date +%Y%m%d_%H%M%S)"
-  echo "Creating backup at: $BACKUP_DIR"
-  cp -r "$SCRIPT_DIR" "$BACKUP_DIR"
+  echo "Creating code backup at: $BACKUP_DIR"
+  mkdir -p "$BACKUP_DIR"
+  tar --exclude='./venv' \
+      --exclude='./.venv' \
+      --exclude='./.git' \
+      --exclude='./__pycache__' \
+      --exclude='./*.db*' \
+      -cf - -C "$SCRIPT_DIR" . | tar -xf - -C "$BACKUP_DIR"
+
+  # Detect whether tarball has a top-level wrapper directory or flat root files
+  STRIP_ARGS=""
+  if ! tar -tzf "$TARBALL" 2>/dev/null | grep -qE '^(\./)?main\.py$'; then
+    if tar -tzf "$TARBALL" 2>/dev/null | grep -qE '^[^/]+/main\.py$'; then
+      STRIP_ARGS="--strip-components=1"
+    fi
+  fi
 
   # Extract update (overwrite existing files)
-  tar -xzf "$TARBALL" -C "$SCRIPT_DIR" --strip-components=1
+  tar -xzf "$TARBALL" -C "$SCRIPT_DIR" $STRIP_ARGS
   EXTRACT_STATUS=$?
 
   if [ $EXTRACT_STATUS -ne 0 ]; then
     echo "Error: Failed to extract tarball. Restoring backup..."
     cp -r "$BACKUP_DIR/"* "$SCRIPT_DIR/"
     exit 1
+  fi
+
+  # Remove temporary/staged tarball after successful extraction
+  if [[ "$TARBALL" == /tmp/* ]] || [[ "$TARBALL" == */.staged_update.tar.gz ]]; then
+    sudo rm -f "$TARBALL" 2>/dev/null || true
   fi
 
   echo "Files updated successfully."
@@ -134,6 +164,12 @@ fi
 echo "Installing/updating dependencies..."
 "./$VENV_DIR/bin/pip" install -r requirements.txt --quiet 2>&1
 
+# Update Kiosk & Desktop launch scripts and Chromium crash prevention policies
+if [ -f "fix_desktop.sh" ]; then
+  echo "Updating Kiosk & Desktop launch configurations..."
+  bash ./fix_desktop.sh
+fi
+
 # Update auxiliary systemd services if installed
 if [ -f "/etc/systemd/system/ups_shutdown.service" ]; then
   echo "Updating ups_shutdown.service..."
@@ -161,8 +197,13 @@ echo "========================================="
 
 # Restart service if running under systemd
 if systemctl is-active --quiet modbus_hmi 2>/dev/null; then
-  echo "Restarting modbus_hmi service..."
-  sudo systemctl restart modbus_hmi
-  echo "Service restarted."
+  if [ "$IS_STAGE2_RESUME" = true ]; then
+    echo "Restarting modbus_hmi service..."
+    sudo systemctl restart modbus_hmi
+    echo "Service restarted."
+  else
+    echo "Scheduling modbus_hmi service restart in 2 seconds..."
+    nohup sudo bash -c "sleep 2 && systemctl restart modbus_hmi" >/dev/null 2>&1 &
+  fi
 fi
 

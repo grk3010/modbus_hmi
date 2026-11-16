@@ -18,31 +18,8 @@ sudo apt-get install -y swaybg curl chromium
 # 3. Setup Project Assets
 sudo cp "$PROJECT_DIR/iodd_files/assets/compressor_graphic.png" /usr/share/plymouth/themes/pix/splash.png
 
-# 4. Create Minimal Kiosk Launch Script
-KIOSK_SCRIPT="$USER_HOME/.config/labwc/kiosk-launch.sh"
-sudo -u "$ACTUAL_USER" mkdir -p "$(dirname "$KIOSK_SCRIPT")"
-sudo -u "$ACTUAL_USER" cat << 'EOF_KIOSK' > "$KIOSK_SCRIPT"
-#!/bin/bash
-# Minimal Wayland Kiosk Launch
-exec > /tmp/kiosk.log 2>&1
-echo "Kiosk started at $(date)"
-
-# Force screen rotation to landscape (fixes rotation bug on warm restarts without Plymouth)
-wlr-randr --output DSI-1 --transform 270 || true
-
-swaybg -i /home/pi/modbus_hmi/iodd_files/assets/compressor_graphic.png -m fill &
-
-# Wait for HMI server
-while ! curl -s http://localhost:8080 >/dev/null; do sleep 1; done
-
-# Clean state and force volatile profile directory
-rm -rf /tmp/chromium_kiosk
-mkdir -p /tmp/chromium_kiosk
-
-# Launch Chromium with a fully fresh in-memory profile to permanently prevent crash recovery popups
-chromium --user-data-dir=/tmp/chromium_kiosk --kiosk --incognito --noerrdialogs --disable-translate --no-first-run --fast --fast-start --disable-infobars --disable-session-crashed-bubble --hide-crash-restore-bubble --disable-features=TranslateUI --disk-cache-dir=/tmp/chromium_cache --password-store=basic --ozone-platform=wayland --enable-features=UseOzonePlatform http://localhost:8080
-EOF_KIOSK
-chmod +x "$KIOSK_SCRIPT"
+# 4. Configure Kiosk & Desktop Launch Scripts and Chromium Policies
+bash "$PROJECT_DIR/fix_desktop.sh"
 
 # 5. Update .profile for Login Launch
 PROFILE="$USER_HOME/.profile"

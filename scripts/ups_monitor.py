@@ -28,6 +28,8 @@ ups_pin = DigitalInputDevice(DI_PIN, pull_up=PULL_UP)
 
 def safe_poweroff():
     logging.critical("Initiating safe poweroff sequence!")
+    # Gracefully stop Chromium first so it does not record an unclean Wayland disconnect crash
+    subprocess.run(['pkill', '-TERM', '-f', '/usr/lib/chromium/chromium'], check=False)
     # CRITICAL: Flush filesystem buffers to protect compressor logs/configs
     os.system("sync")
     time.sleep(1)

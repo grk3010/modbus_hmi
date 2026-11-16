@@ -9,25 +9,39 @@ import pages.charts
 import pages.config
 
 # --- UI Styling ---
+# Optimized for Raspberry Pi CM4 VideoCore VI GPU & Capacitive Touchscreen:
+# - Removed expensive multi-pass GPU `backdrop-filter: blur()` and `filter: drop-shadow()`
+# - Added `touch-action: manipulation` to eliminate 300ms browser tap delay
+# - Added immediate hardware-accelerated `:active` press feedback
 ui.add_head_html("""
 <style>
+    *, *::before, *::after {
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
     body {
         background-color: #121212;
         color: #e0e0e0;
         font-family: 'Inter', sans-serif;
+        user-select: none;
+        -webkit-user-select: none;
     }
     .q-btn {
         min-height: 60px;
         min-width: 60px;
         font-weight: bold;
+        transition: transform 0.06s ease-out, background-color 0.1s ease-out !important;
+        will-change: transform;
+    }
+    .q-btn:active {
+        transform: scale(0.95) !important;
     }
     .dashboard-card {
-        background: rgba(30, 30, 30, 0.8);
+        background: #1e1e1e;
         border: 1px solid #333;
         border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.45);
         padding: 20px;
-        backdrop-filter: blur(10px);
     }
     .value-highlight {
         font-size: 2rem;
@@ -35,36 +49,36 @@ ui.add_head_html("""
         color: #4CAF50;
     }
     .interactive-element {
-        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-        filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+        transition: transform 0.12s ease-out;
+        will-change: transform;
     }
     .interactive-element:hover {
-        transform: scale(1.15);
-        filter: drop-shadow(0 0 15px rgba(32, 201, 151, 0.8));
+        transform: scale(1.08);
         z-index: 100 !important;
+    }
+    .interactive-element:active {
+        transform: scale(0.94);
     }
     .compressor-zone {
         border-radius: 20px;
-        transition: all 0.3s;
+        transition: opacity 0.15s ease-out, border-color 0.15s ease-out;
         border: 2px solid transparent;
         background: radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 60%);
         opacity: 0;
     }
-    .compressor-zone:hover {
+    .compressor-zone:hover, .compressor-zone:active {
         opacity: 1;
         border: 2px solid #20c997;
-        box-shadow: 0 0 30px rgba(32, 201, 151, 0.3) inset;
         cursor: pointer;
     }
     .live-badge {
-        background: rgba(0,0,0,0.7);
+        background: rgba(18, 18, 18, 0.92);
         padding: 4px 8px;
         border-radius: 8px;
         font-size: 14px;
         font-weight: bold;
         color: #fff;
-        border: 1px solid rgba(255,255,255,0.1);
-        backdrop-filter: blur(4px);
+        border: 1px solid rgba(255,255,255,0.12);
     }
 </style>
 """, shared=True)
@@ -141,4 +155,11 @@ if opcua_client:
     app.on_startup(lambda: asyncio.create_task(opcua_client.connect_and_poll()))
 
 if __name__ in {"__main__", "__mp_main__"}:
-    ui.run(host='0.0.0.0', port=8080, dark=True, title='Industrial HMI', storage_secret='industrial_hmi_secret')
+    ui.run(
+        host='0.0.0.0',
+        port=8080,
+        dark=True,
+        title='Industrial HMI',
+        storage_secret='industrial_hmi_secret',
+        binding_refresh_interval=0.25,
+    )
